@@ -1,0 +1,21 @@
+name: check
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # The resolver of the fab0 release the recipes' settings pin.
+      - uses: actions/checkout@v4
+        with:
+          repository: fab0-dev/fab0-core
+          ref: fab0--v0.2.0
+          path: .fab0-core
+      - uses: astral-sh/setup-uv@v6
+      - name: Every recipe copies into an empty repo and validates
+        run: FAB0_RESOLVE=.fab0-core/plugins/fab0/bin/fab0-resolve scripts/check-recipes

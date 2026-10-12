@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+# Copy each recipe into an empty git repo, as a project would, and check it:
+#   - every file under .fab0/ starts with its source header;
+#   - claude-settings.json is valid JSON;
+#   - fab0-resolve validate accepts the wiring.
+# The resolver is $FAB0_RESOLVE, else a sibling fab0-core checkout, else fab0-resolve on PATH.
+set -euo pipefail
+
+root=$(cd "$(dirname "$0")/.." && pwd)
+resolve=${FAB0_RESOLVE:-}
+if [ -z "$resolve" ]; then
+  sibling="$root/../fab0-core/plugins/fab0/bin/fab0-resolve"
+  if [ -x "$sibling" ]; then resolve=$sibling; else resolve=$(command -v fab0-resolve || true); fi
+fi
+[ -n "$resolve" ] || { echo "no fab0-resolve: set FAB0_RESOLVE"; exit 2; }
+
+status=0
+for recipe in "$root"/*/; do
+  [ -d "$recipe.fab0" ] || continue
+  name=$(basename "$recipe")
+  failed=0
+  tmp=$(mktemp -d)
+  git -C "$tmp" init -q -b main
+  cp -R "$recipe.fab0" "$tmp/.fab0"
+
+  while IFS= read -r file; do
+    if ! head -1 "$file" | grep -q "^# from fab0-dev/fab0-recipes $name--v[0-9]"; then
+      echo "  ${file#"$tmp"/}: the first line isn't '# from fab0-dev/fab0-recipes $name--v<version>'"
+      failed=1
+    fi
+  done < <(find "$tmp/.fab0" -type f | sort)
+
+  if [ -f "$recipe/claude-settings.json" ] && ! python3 -m json.tool "$recipe/claude-settings.json" >/dev/null; then
+    echo "  claude-settings.json isn't valid JSON"
+    failed=1
+  fi
+
+  if ! out=$("$resolve" validate --project "$tmp"); then
+    echo "$out" | sed 's/^/  /'
+    failed=1
+  fi
+  rm -rf "$tmp"
+
+  if [ $failed = 0 ]; then echo "PASS  $name"; else echo "FAIL  $name"; status=1; fi
+done
+exit $status

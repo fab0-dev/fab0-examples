@@ -16,3 +16,13 @@ A recipe is copied, not installed:
 ## Licence
 
 [Apache 2.0](LICENSE)
+
+## Develop
+
+Copy each recipe into an empty repo and validate it with the resolver of a sibling `fab0-core` checkout (or `FAB0_RESOLVE=<path>`):
+
+```bash
+scripts/check-recipes
+```
+
+CI runs the same check against the `fab0-core` release that the recipes' settings pin. When a recipe moves to a new release, change both that tag and the one in `.github/workflows/check.yml`.
