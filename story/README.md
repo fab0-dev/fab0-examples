@@ -75,8 +75,17 @@ Merge `claude-settings.json` into `.claude/settings.json`. In a new project, cop
 
 1. Install [`uv`](https://docs.astral.sh/uv/); the resolver runs on it.
 2. Open Claude Code in the home repo and **trust the folder**. Claude Code applies a project's marketplaces only in a trusted folder, and ignores them silently otherwise.
-3. `/plugin` lists `fab0@fab0`.
-4. Check the wiring; it must print `"ok": true`:
+3. Install the plugin for this repo, from its root:
+   ```bash
+   claude plugin install fab0@fab0 --scope project
+   ```
+   Enabling it in `.claude/settings.json` alone isn't enough for every client: the desktop app, for example, doesn't load a plugin that is enabled but not installed. Each person installs it once per clone. The command can rewrite `.claude/settings.json` in a different order; keep your committed version with `git checkout -- .claude/settings.json`. Restart open sessions afterwards, since plugins load when a session starts.
+4. `claude plugin list` shows `fab0@fab0` with scope `project`, and `/fab0:run` and `/fab0:inbox` are available in a new session.
+5. Optional: plugins you enabled for all your projects load here too. To keep one out of this project's agents' context, turn it off for this repo only; that writes the gitignored `.claude/settings.local.json`:
+   ```bash
+   claude plugin disable <plugin>@<marketplace> --scope local
+   ```
+6. Check the wiring; it must print `"ok": true`:
    ```bash
    fab0-resolve validate
    ```
