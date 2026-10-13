@@ -16,7 +16,7 @@ Use it when one spec should drive work in one or more repos that share a process
 | File | Copy to | Notes |
 |---|---|---|
 | `.fab0/` | `.fab0/` in the home repo | Edit `fab0.yaml`. The other files work as they are |
-| `claude-settings.json` | merge into `.claude/settings.json` | Declares the `fab0` marketplace at a release tag, enables `fab0@fab0`, and denies merging, force pushes, pushes to `main` and edits under `.github/` |
+| `claude-settings.json` | merge into `.claude/settings.json` | Declares the `fab0` marketplace with auto-update, enables `fab0@fab0`, and denies merging, force pushes, pushes to `main` and edits under `.github/` |
 
 Each file's first line names this recipe and its release. Keep that line, so you can compare against a later release.
 
@@ -88,6 +88,26 @@ Merge `claude-settings.json` into `.claude/settings.json`. In a new project, cop
 6. Check the wiring; it must print `"ok": true`:
    ```bash
    fab0-resolve validate
+   ```
+7. Updates need nothing in the project. The marketplace points at the latest `fab0` release, and auto-update fetches a new one in the background during a session; it loads at the next start. To update at once:
+   ```bash
+   claude plugin marketplace update fab0
+   ```
+   ```bash
+   claude plugin update fab0@fab0 --scope project
+   ```
+   A clone set up from `story--v0.1.0` registered the marketplace pinned to a tag. Merge the new `claude-settings.json`, then register the marketplace once more and restore your settings:
+   ```bash
+   claude plugin marketplace remove fab0
+   ```
+   ```bash
+   claude plugin marketplace add fab0-dev/fab0-core --scope project
+   ```
+   ```bash
+   claude plugin install fab0@fab0 --scope project
+   ```
+   ```bash
+   git checkout -- .claude/settings.json
    ```
 
 ## Use
