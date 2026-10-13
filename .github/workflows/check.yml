@@ -4,18 +4,27 @@ on:
   pull_request:
   push:
     branches: [main]
+  # A fab0-core release can break a recipe without a change here.
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
 
 jobs:
   check:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      # The resolver of the fab0 release the recipes' settings pin.
+      # The resolver of the release that the fab0 marketplace points at: what a project installs.
       - uses: actions/checkout@v4
         with:
           repository: fab0-dev/fab0-core
-          ref: fab0--v0.2.0
           path: .fab0-core
+          fetch-depth: 0
+      - name: Check out the current fab0 release
+        run: |
+          ref=$(jq -r '.plugins[] | select(.name == "fab0") | .source.ref' .fab0-core/.claude-plugin/marketplace.json)
+          echo "fab0 release: $ref"
+          git -C .fab0-core checkout -q "$ref"
       - uses: astral-sh/setup-uv@v6
       - name: Every recipe copies into an empty repo and validates
         run: FAB0_RESOLVE=.fab0-core/plugins/fab0/bin/fab0-resolve scripts/check-recipes
