@@ -1,7 +1,7 @@
-# from fab0-dev/fab0-recipes story--v0.1.1
+# from fab0-dev/fab0-examples story--v0.2.0
 artifact: spec
-format: markdown
-location: {repo: home, path: "specs/{run}.md"}
+kind: file
+file: {repo: home, path: "specs/{run}.md", format: markdown}
 verify:
   - sections: [Intent, Scope, Scenarios, Constraints, Decisions, Open questions]
 keep: durable

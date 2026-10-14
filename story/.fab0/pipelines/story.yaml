@@ -1,11 +1,22 @@
-# from fab0-dev/fab0-recipes story--v0.1.1
+# from fab0-dev/fab0-examples story--v0.2.0
 pipeline: story
-item: {issue_type: Story}
-stages:
-  - spec                 # product owner; gate: the spec PR
-  - plan                 # Task sub-issues from tasks.yaml
-  - foreach: tasks       # each task: its own sub-issue, branch and PR
-    item: {issue_type: Task}
-    stages: [implement]  # repo owner; gate: the reviewer agent
-    gate: human          # the task PR; merging it closes the task
-  - deliver              # once every task is merged
+trigger: {issue: {type: Story}}
+onStart:
+  - git.run-branch
+  - pr.open-run: {draft: true}
+steps:
+  # The spec and its task list, approved by merging their pull request into the run branch.
+  - step: spec
+    gate: {human: {owner: product-owner}}
+  # One unit per task, in parallel where their files don't overlap and their order allows.
+  - foreach: tasks
+    id: tasks
+    onStart:
+      - tracker.child.sync: {type: Task, title: "{unit.title}"}
+    steps:
+      - step: implement
+        gate: {auto: {agent: reviewer, model: deep}, merge: auto, retry: 2, then: human}
+onEnd:
+  - git.sync-base
+  - git.remove-run-artifacts
+  - pr.ready

@@ -1,0 +1,136 @@
+#!/usr/bin/env python3
+"""Copy each example into an empty git repository, as a project would, and check it:
+- every file the project copies names its source and release on its first line (`# from …`, a JSON
+  `"$comment"`, or an HTML comment after a Markdown file's front matter);
+- the JSON files parse;
+- the merge guard blocks what it must and lets the rest through;
+- `fab0-resolve validate` accepts the wiring.
+
+The engine is $FAB0_RESOLVE, else a sibling fab0-core checkout's, else `fab0-resolve` on PATH.
+
+    scripts/check-examples [example ...]
+"""
+
+import json
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+GUARD_CASES = {
+    "gh pr merge 3 --squash": 2,
+    "cd repo && gh pr merge 3": 2,
+    "gh api -X PUT repos/o/r/pulls/3/merge": 2,
+    "git push origin main": 2,
+    "git -C ../web push origin HEAD:main": 2,
+    "git push --force-with-lease origin fab0/1/spec": 2,
+    "git push origin +fab0/1/spec": 2,
+    "git push -u origin fab0/1/spec": 0,
+    "gh pr view 3": 0,
+    "git status": 0,
+}
+
+
+def engine() -> str:
+    if os.environ.get("FAB0_RESOLVE"):
+        return os.environ["FAB0_RESOLVE"]
+    sibling = ROOT.parent / "fab0-core" / "plugins" / "fab0" / "bin" / "fab0-resolve"
+    if sibling.is_file():
+        return str(sibling)
+    found = shutil.which("fab0-resolve")
+    if not found:
+        sys.exit("no fab0-resolve: set FAB0_RESOLVE")
+    return found
+
+
+def assemble(example: Path, project: Path) -> list[Path]:
+    """What the example's README says to copy; returns the copied files."""
+    subprocess.run(["git", "init", "-q", "-b", "main", str(project)], check=True)
+    shutil.copytree(example / ".fab0", project / ".fab0")
+    claude = project / ".claude"
+    for part in ("agents", "skills", "hooks"):
+        if (example / part).is_dir():
+            shutil.copytree(example / part, claude / part, ignore=shutil.ignore_patterns("hooks.json"))
+    if (example / "claude-settings.json").is_file():
+        shutil.copy(example / "claude-settings.json", claude / "settings.json")
+    return sorted(p for p in project.rglob("*") if p.is_file() and ".git" not in p.relative_to(project).parts)
+
+
+def header_problem(path: Path, source: str) -> str | None:
+    text = path.read_text()
+    if path.suffix == ".json":
+        try:
+            data = json.loads(text)
+        except ValueError as exc:
+            return f"isn't valid JSON: {exc}"
+        if path.name == "settings.json":
+            return None  # merged into the project's own settings, so it carries no header
+        return None if data.get("$comment") == source.removeprefix("# ") else f'has no "$comment": "{source[2:]}"'
+    lines = text.splitlines()
+    if path.suffix == ".md":
+        if lines and lines[0] == "---":
+            end = lines.index("---", 1)
+            lines = lines[end + 1 :]
+        return None if lines and lines[0] == f"<!-- {source[2:]} -->" else f"doesn't start with <!-- {source[2:]} -->"
+    if lines and lines[0].startswith("#!"):
+        lines = lines[1:]
+    return None if lines and lines[0] == source else f"doesn't start with '{source}'"
+
+
+def check_guard(guard: Path, project: Path) -> list[str]:
+    problems = []
+    for command, expected in GUARD_CASES.items():
+        event = json.dumps({"tool_name": "Bash", "tool_input": {"command": command}})
+        run = subprocess.run(
+            [sys.executable, str(guard)],
+            input=event,
+            capture_output=True,
+            text=True,
+            env={**os.environ, "CLAUDE_PROJECT_DIR": str(project)},
+        )
+        if run.returncode != expected:
+            problems.append(f"merge guard: `{command}` exits {run.returncode}, not {expected}")
+    return problems
+
+
+def check(example: Path, resolve: str) -> list[str]:
+    version = json.loads((example / ".claude-plugin" / "plugin.json").read_text())["version"]
+    source = f"# from fab0-dev/fab0-examples {example.name}--v{version}"
+    problems = []
+    with tempfile.TemporaryDirectory() as tmp:
+        project = Path(tmp) / example.name
+        for path in assemble(example, project):
+            problem = header_problem(path, source)
+            if problem:
+                problems.append(f"{path.relative_to(project)} {problem}")
+        guard = project / ".claude" / "hooks" / "merge-guard.py"
+        if guard.is_file():
+            problems += check_guard(guard, project)
+        run = subprocess.run([resolve, "validate", "--project", str(project)], capture_output=True, text=True)
+        if run.returncode:
+            try:
+                errors = json.loads(run.stdout).get("errors") or [json.loads(run.stdout)]
+            except ValueError:
+                errors = [run.stdout + run.stderr]
+            problems += [f"validate: {e}" for e in errors]
+    return problems
+
+
+def main() -> int:
+    resolve = engine()
+    names = sys.argv[1:] or sorted(p.name for p in ROOT.iterdir() if (p / ".fab0").is_dir())
+    status = 0
+    for name in names:
+        problems = check(ROOT / name, resolve)
+        print(("FAIL  " if problems else "PASS  ") + name)
+        for p in problems:
+            print(f"  {p}")
+        status |= bool(problems)
+    return status
+
+
+if __name__ == "__main__":
+    sys.exit(main())

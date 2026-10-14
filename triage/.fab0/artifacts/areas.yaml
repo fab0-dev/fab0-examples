@@ -1,0 +1,4 @@
+# from fab0-dev/fab0-examples triage--v0.1.0
+artifact: areas
+kind: file
+file: {repo: home, path: .fab0/areas.txt, format: text}

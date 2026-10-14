@@ -2,10 +2,7 @@
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
   "extraKnownMarketplaces": {
     "fab0": {
-      "source": {
-        "source": "github",
-        "repo": "fab0-dev/fab0-core"
-      },
+      "source": {"source": "github", "repo": "fab0-dev/fab0-core"},
       "autoUpdate": true
     }
   },
@@ -24,6 +21,14 @@
       "Bash(git push * main)",
       "Bash(git push * HEAD:main)",
       "Edit(/.github/**)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [{"type": "command", "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/merge-guard.py\""}]
+      }
     ]
   }
 }

@@ -1,6 +1,7 @@
-# from fab0-dev/fab0-recipes story--v0.1.1
+# from fab0-dev/fab0-examples story--v0.2.0
 artifact: tasks
-format: yaml
-location: {repo: home, path: "work/{run}/tasks.yaml"}
-schema: fab0:schemas/tasks.json
+kind: file
+file: {repo: home, path: "work/{run}/tasks.yaml", format: yaml}
+schema: .fab0/schemas/tasks.json
+elements: {id: id, title: title, repo: repo, after: depends_on, paths: files}
 keep: run

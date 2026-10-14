@@ -1,0 +1,13 @@
+{
+  "$comment": "from fab0-dev/fab0-examples triage--v0.1.0",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "The triage example's classification",
+  "type": "object",
+  "required": ["severity", "area"],
+  "additionalProperties": false,
+  "properties": {
+    "severity": {"enum": ["low", "medium", "high"]},
+    "area": {"type": "string", "pattern": "^[a-z][a-z-]*$"},
+    "duplicate_of": {"description": "The number of an open issue this one repeats.", "type": "integer", "minimum": 1}
+  }
+}
