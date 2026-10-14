@@ -1,20 +1,27 @@
-# from fab0-dev/fab0-recipes story--v0.1.1
-# Edit everything marked EDIT, then run: fab0-resolve validate
-schema: 1
+# from fab0-dev/fab0-examples story--v0.2.0
+# A delivery factory: a product owner's spec and task list, then each task implemented by an agent,
+# reviewed by another agent and merged into the run's branch; a person merges the run into main.
+schema: 2
 repos:
-  # One repo is the home repo: it holds .fab0/, the specs and the run ledgers.
-  # For several repos, add one entry per repo (with key: two or three capital letters).
-  home: {path: ., github: your-org/your-repo, owner: developer}   # EDIT github
-people:                                   # roles → GitHub users
-  product-owner: {github: [your-github-user]}   # EDIT: who writes and approves specs
-  developer:     {github: [your-github-user]}   # EDIT: who implements tasks in the home repo
+  # EDIT: this repository, and one entry per repository tasks may change (sibling checkouts).
+  home: {path: ., github: OWNER/REPO, owner: product-owner}
+  # backend: {path: ../backend, github: OWNER/backend, owner: backend}
+people:
+  # EDIT: the GitHub users in each role.
+  product-owner: {github: [USER]}
 tracker:
-  kind: github-projects
-  owner: your-org                         # EDIT: the user or organisation that owns the project
-  project: 1                              # EDIT: the project number
-  fields: {stage: Stage, run: Run, waiting: Waiting on}
-pipelines: [story]
+  kind: github
+  owner: OWNER # EDIT
+  # project: 1     # EDIT: a GitHub Project number, to show each item's state on a board
+  # fields: {signal: fab0}
+git:
+  base: main
+  branching: run
+  auto_merge: {into: [run]}
+parallel: {max: 3, cross_run: warn}
+ledger: {path: "work/{run}/ledger"}
 models:
   claude-code: {deep: opus, balanced: sonnet, fast: haiku}
 profiles:
-  cheap: {models: {claude-code: {deep: sonnet}}}
+  cheap: {models: {claude-code: {deep: sonnet, balanced: sonnet}}}
+pipelines: [story]

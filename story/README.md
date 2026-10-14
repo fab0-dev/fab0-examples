@@ -1,119 +1,80 @@
-# `story` recipe
+# `story` example
 
-The core fab0 flow for one work item, a GitHub issue of type **Story**:
+Delivery of one work item, a GitHub issue of type **Story**, on its own branch:
 
-| Stage | Who | What | Gate |
+| Step | Who | What | Gate |
 |---|---|---|---|
-| `spec` | product owner | `fab0:spec-author` writes `specs/<run>.md` and `work/<run>/tasks.yaml` | merging the spec PR |
-| `plan` | anyone (action) | Task sub-issues from `tasks.yaml`, each assigned to its repo's owner, with blocked-by links | — |
-| `implement` (per task) | the task repo's owner | `fab0:implementer` changes the task's files, with tests | `fab0:reviewer`, on a different model; then merging the task PR |
-| `deliver` | anyone (action) | Appends the review results to the spec and removes `work/<run>/tasks.yaml`, in a PR that closes the Story | merging the delivery PR |
+| start | `apply` | The run branch `fab0/<run>/base` in every repository the run writes, and a draft run pull request into `main` that closes the Story | — |
+| `spec` | `spec-author` agent | `specs/<run>.md` and `work/<run>/tasks.yaml`, on the sub-branch `fab0/<run>/spec` | **human**: the product owner merges the spec's pull request into the run branch |
+| tasks | `apply` | A Task sub-issue per task, blocked by the sub-issues of the tasks it depends on | — |
+| `implement`, per task | `implementer` agent | The task's files, with tests, on `fab0/<run>/implement-<task>`. Tasks run in parallel where their files don't overlap and their order allows | **auto**: the `reviewer` agent; on approval and green checks, `apply` merges the task into the run branch. Two rejections, or an escalation, hand it to a person |
+| end | `apply` | Brings `main` into the run branch, removes the task list, and marks the run pull request ready | **human**: a person merges the run into `main` |
 
-Use it when one spec should drive work in one or more repos that share a process. Repos that work differently are the case for nested pipelines, which come later.
+People take part at two points: approving the spec, and merging the finished run. Everything between is agents, unless a gate hands something to a person, or a person changes the order of tasks with blocked-by relations on their sub-issues.
 
 ## Files
 
-| File | Copy to | Notes |
+| From here | To your home repository | Notes |
 |---|---|---|
-| `.fab0/` | `.fab0/` in the home repo | Edit `fab0.yaml`. The other files work as they are |
-| `claude-settings.json` | merge into `.claude/settings.json` | Declares the `fab0` marketplace with auto-update, enables `fab0@fab0`, and denies merging, force pushes, pushes to `main` and edits under `.github/` |
+| `.fab0/` | `.fab0/` | Edit `fab0.yaml` where it says `EDIT`. The rest works as is |
+| `agents/*.md` | `.claude/agents/` | `spec-author`, `implementer`, `reviewer` |
+| `skills/spec-format/` | `.claude/skills/spec-format/` | The spec and task list format |
+| `hooks/merge-guard.py` | `.claude/hooks/merge-guard.py` | Blocks merges, pushes to `main` and force pushes the model issues |
+| `claude-settings.json` | merge into `.claude/settings.json` | The `fab0` marketplace with auto-update, the plugin, deny rules and the merge guard hook |
 
-Each file's first line names this recipe and its release. Keep that line, so you can compare against a later release.
+Each file's first line names this example and its release. Keep it, so you can compare against a later release.
+
+Instead of copying `agents/`, `skills/` and `hooks/`, you can install them as the `story@fab0-examples` plugin; see the [repository README](../README.md). The plugin brings the merge guard as its own hook. Then prefix the names in `.fab0/steps/`: `agent: story:spec-author`, `skills: [story:spec-format]`, and so on.
 
 ## Set up
 
 ### 1. Copy and edit
 
-From your home repo (the repo that will hold `.fab0/`, the specs and the run ledgers):
+From your home repository, with this repository checked out beside it:
 
 ```bash
-cp -R ../fab0-recipes/story/.fab0 .fab0
+cp -R ../fab0-examples/story/.fab0 .fab0
 ```
 
-Edit `.fab0/fab0.yaml` where it says `EDIT`:
-- **`repos.home.github`**: this repo, as `owner/name`.
-- **`people`**: the GitHub users in each role. `product-owner` writes and approves specs. The role in a repo's `owner` field gets that repo's tasks, and the delivery PR when the repo is the home repo.
-- **`tracker`**: the project owner and number.
-- **More repos:** add one entry per repo. Paths are relative to the home repo, and each needs a `key` of two or three capital letters:
-  ```yaml
-  repos:
-    home:    {path: ., github: acme/product, owner: product-owner}
-    backend: {path: ../backend, github: acme/backend, owner: backend, key: BE}
-    web:     {path: ../web, github: acme/web, owner: frontend, key: FE}
-  ```
-  Every repo is a sibling checkout on each person's machine.
+```bash
+mkdir -p .claude/agents .claude/skills .claude/hooks && cp ../fab0-examples/story/agents/*.md .claude/agents/ && cp -R ../fab0-examples/story/skills/spec-format .claude/skills/ && cp ../fab0-examples/story/hooks/merge-guard.py .claude/hooks/
+```
 
-Merge `claude-settings.json` into `.claude/settings.json`. In a new project, copy it as `.claude/settings.json`.
+Merge `claude-settings.json` into `.claude/settings.json`, or copy it there in a new project.
+
+Edit `.fab0/fab0.yaml`:
+- **`repos`:** this repository as `home`, and one entry per other repository tasks may change. Each is a sibling checkout on every machine that runs fab0. A repository's `owner` is the role whose turn its tasks are when a gate hands one to a person.
+- **`people`:** the GitHub users in each role.
+- **`tracker`:** the owner of the issues, and optionally a GitHub Project to show each item's state in a text field (`fields: {signal: <field name>}`).
+- **`profiles`:** `cheap` runs the deep steps on a cheaper model: `/fab0:run <run> --profile cheap`.
 
 ### 2. GitHub
 
-1. **Issue types:** the organisation needs `Story` and `Task`. An organisation owner adds them under Settings → Planning → Issue types.
-2. **Project:** one GitHub Project with three fields. fab0 writes these three and never Status.
-   ```bash
-   gh project field-create <number> --owner <owner> --name Stage --data-type SINGLE_SELECT --single-select-options "spec,plan,implement,deliver,done"
-   ```
-   ```bash
-   gh project field-create <number> --owner <owner> --name Run --data-type TEXT
-   ```
-   ```bash
-   gh project field-create <number> --owner <owner> --name "Waiting on" --data-type TEXT
-   ```
-   In the project's settings:
-   - turn on the built-in workflows: auto-add issues from your repos, item added → Todo, item closed → Done;
-   - add the views:
-     - **My turn**: assignee is @me, grouped by Stage;
-     - **Board**: grouped by Stage;
-     - **Waiting**: `Waiting on` is set;
-     - **Hierarchy**: Stories with sub-issue progress.
-3. **Branch protection** on `main` of every repo: pull requests required, your linters and tests as required checks, and reviews as your team chooses. fab0 never merges; people do.
-4. **Access:** everyone who runs fab0 needs `gh` logged in with the `project` scope:
-   ```bash
-   gh auth refresh -s project
-   ```
+1. **Issue types:** the organisation needs `Story` and `Task`. An organisation owner adds them in the organisation's settings, under issue types.
+2. **The base branch:** protect `main` with a ruleset that requires a pull request, with your tests as required checks. Leave `fab0/**` branches unprotected: `apply` merges approved tasks into run branches.
+3. **Checks on run branches:** if your CI runs on pull requests into any branch, task pull requests get checks, and `apply` waits for them to pass before it merges.
+4. **Board (optional):** a GitHub Project with a text field named as in `tracker.fields.signal`.
+5. **Access:** everyone who runs fab0 needs `gh` logged in, with the `project` scope if there is a board: `gh auth refresh -s project`.
+
+The `fab0:github` skill checks all of this: ask Claude Code to set up GitHub for fab0.
 
 ### 3. Claude Code
 
-1. Install [`uv`](https://docs.astral.sh/uv/); the resolver runs on it.
-2. Open Claude Code in the home repo and **trust the folder**. Claude Code applies a project's marketplaces only in a trusted folder, and ignores them silently otherwise.
-3. Install the plugin for this repo, from its root:
+1. Install [`uv`](https://docs.astral.sh/uv/); the engine runs on it.
+2. Open Claude Code in the home repository and trust the folder: Claude Code applies a project's marketplaces only in a trusted folder.
+3. Install the plugin for this repository, once per clone:
    ```bash
    claude plugin install fab0@fab0 --scope project
    ```
-   Enabling it in `.claude/settings.json` alone isn't enough for every client: the desktop app, for example, doesn't load a plugin that is enabled but not installed. Each person installs it once per clone. The command can rewrite `.claude/settings.json` in a different order; keep your committed version with `git checkout -- .claude/settings.json`. Restart open sessions afterwards, since plugins load when a session starts.
-4. `claude plugin list` shows `fab0@fab0` with scope `project`, and `/fab0:run` and `/fab0:inbox` are available in a new session.
-5. Optional: plugins you enabled for all your projects load here too. To keep one out of this project's agents' context, turn it off for this repo only; that writes the gitignored `.claude/settings.local.json`:
-   ```bash
-   claude plugin disable <plugin>@<marketplace> --scope local
-   ```
-6. Check the wiring; it must print `"ok": true`:
+4. Check the wiring; it must print `"ok": true`:
    ```bash
    fab0-resolve validate
-   ```
-7. Updates need nothing in the project. The marketplace points at the latest `fab0` release, and auto-update fetches a new one in the background during a session; it loads at the next start. To update at once:
-   ```bash
-   claude plugin marketplace update fab0
-   ```
-   ```bash
-   claude plugin update fab0@fab0 --scope project
-   ```
-   A clone set up from `story--v0.1.0` registered the marketplace pinned to a tag. Merge the new `claude-settings.json`, then register the marketplace once more and restore your settings:
-   ```bash
-   claude plugin marketplace remove fab0
-   ```
-   ```bash
-   claude plugin marketplace add fab0-dev/fab0-core --scope project
-   ```
-   ```bash
-   claude plugin install fab0@fab0 --scope project
-   ```
-   ```bash
-   git checkout -- .claude/settings.json
    ```
 
 ## Use
 
-1. Open an issue of type Story, write the intent in its body, and add it to the project.
-2. The product owner runs `/fab0:run <issue number>`. The spec PR opens; reviewers request changes with a PR review, and `/fab0:run` revises the spec.
-3. Merging the spec PR approves it. `/fab0:inbox` then shows the pending `plan` to everyone, and each person's tasks once they are unblocked.
-4. Each developer runs `/fab0:run <issue> --task T<n>`. The reviewer agent gates the result before its PR opens.
-5. Once every task PR is merged, anyone runs `/fab0:run <issue>` for the delivery PR. Merging it closes the Story.
+1. Open an issue of type Story and write the intent in its body.
+2. The product owner runs `/fab0:run <issue>`. The spec's pull request opens against the run branch. Ask for changes with a pull request review and run `/fab0:run <issue>` again; merging it approves the spec.
+3. Anyone runs `/fab0:run <issue>`. Tasks are implemented, reviewed and merged in parallel, as far as their files and dependencies allow. Run it again after a person answers questions or decides an escalation.
+4. `/fab0:inbox` shows what each run waits for and on whom.
+5. A person reviews the run pull request and merges it into `main`, which closes the Story.

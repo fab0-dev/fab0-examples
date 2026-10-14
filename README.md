@@ -1,30 +1,50 @@
-# fab0-recipes
+# fab0-examples
 
-Ready-made `.fab0/` setups for [fab0](https://github.com/fab0-dev/fab0): complete, working sets of wiring files for one way of working, which you copy into a project.
+Example factories for [fab0](https://github.com/fab0-dev/fab0), the toolkit for building and operating software factories. Each example is a complete, working factory for one way of working: its `.fab0/` wiring, its agents and skills, and the settings it needs. Copy one into a project and make it yours.
 
-> **Frozen.** fab0 is being rebuilt as a toolkit for building factories, and the `story` recipe here is broken against the coming core. This repository becomes `fab0-examples` during the refactor; see [REFACTOR.md](https://github.com/fab0-dev/fab0/blob/main/REFACTOR.md). Don't copy a recipe into a new project until then.
+> **Refactor in progress.** These examples are on fab0's schema 2, which the current `fab0` release (0.5) doesn't read. Use them once `fab0` 0.6 is released; see [REFACTOR.md](https://github.com/fab0-dev/fab0/blob/main/REFACTOR.md).
 
-A recipe is copied, not installed:
-- **The copied files are yours.** Edit them freely; your pipeline changes only through a commit in your project.
-- **The recipe and the plugins move separately.** The behaviour the files point at (agents and skills) comes from plugins, which follow their marketplace's releases with auto-update. A recipe update reaches a project only when someone copies it again.
-- **Every copied file names its source** on its first line, for example `# from fab0-dev/fab0-recipes story--v0.1.0`, so a later diff against a newer release is easy.
+## Examples
 
-## Recipes
-
-| Recipe | When to use it |
+| Example | What it shows |
 |---|---|
-| [`story`](story/) | The core flow. A product owner's spec and task list is approved by merging its PR; each task is implemented and reviewed in its repository; one delivery PR closes the Story |
+| [`story`](story/) | Delivery. A product owner approves a spec and task list; agents implement each task in parallel on sub-branches, another agent reviews and merges them into the run's branch, and a person merges the run into `main` |
+| [`triage`](triage/) | Not delivery. New bug reports are classified by an agent, checked by a command, labelled, and escalated when severe, all in the tracker, with no pull requests |
+
+## Copy or install
+
+**Copy** (recommended). The files become yours: versioned with your project, editable, and a diff against a newer release shows what changed. Every copied file names its source and release on its first line, for example `# from fab0-dev/fab0-examples story--v0.2.0`. Each example's README lists what to copy where.
+
+**Install** the example's agents, skills and hooks as a plugin instead, if you want updates without owning the files. The wiring in `.fab0/` is always copied. Then name the agents and skills with the plugin's prefix in your steps, for example `agent: story:spec-author` and `skills: [story:spec-format]`.
+
+```bash
+claude plugin marketplace add fab0-dev/fab0-examples --scope project
+```
+
+```bash
+claude plugin install story@fab0-examples --scope project
+```
+
+## Develop
+
+Each example must work when copied into an empty repository:
+
+```bash
+scripts/check-examples
+```
+
+It copies each example as its README says, checks every file's source line, the JSON, and the merge guard, and runs `fab0-resolve validate`. It uses the engine of a sibling `fab0-core` checkout, or `$FAB0_RESOLVE`. CI runs it on every change and weekly.
+
+The agents are checked by running the `story` example end to end, headlessly, on a small codebase. It costs tokens, so run it by hand when an agent, a skill or the example's wiring changes:
+
+```bash
+python3 scripts/check-agents.py
+```
+
+```bash
+claude plugin validate --strict .
+```
 
 ## Licence
 
 [Apache 2.0](LICENSE)
-
-## Develop
-
-Copy each recipe into an empty repo and validate it with the resolver of a sibling `fab0-core` checkout (or `FAB0_RESOLVE=<path>`):
-
-```bash
-scripts/check-recipes
-```
-
-CI runs the same check against the `fab0` release that the `fab0-core` marketplace points at, on every change and weekly, so a new release that breaks a recipe shows up here.

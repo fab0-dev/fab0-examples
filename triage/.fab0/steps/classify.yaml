@@ -1,0 +1,7 @@
+# from fab0-dev/fab0-examples triage--v0.1.0
+step: classify
+agent: triager
+model: fast
+inputs: [report, areas]
+return: {questions: optional, schema: .fab0/schemas/classification.json}
+owner: support

@@ -1,0 +1,10 @@
+{
+  "name": "triage",
+  "version": "0.1.0",
+  "description": "The triage example's agent (triager), for teams that take updates instead of copying the file",
+  "author": {"name": "fab0-dev", "url": "https://github.com/fab0-dev"},
+  "homepage": "https://github.com/fab0-dev/fab0-examples/tree/main/triage",
+  "repository": "https://github.com/fab0-dev/fab0-examples",
+  "license": "Apache-2.0",
+  "keywords": ["fab0", "triage", "agents"]
+}

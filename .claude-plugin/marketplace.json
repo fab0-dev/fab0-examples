@@ -1,0 +1,23 @@
+{
+  "name": "fab0-examples",
+  "owner": {"name": "fab0-dev", "url": "https://github.com/fab0-dev"},
+  "metadata": {
+    "description": "Example fab0 factories: their agents, skills and hooks as plugins. Most projects copy the files instead; see each example's README."
+  },
+  "plugins": [
+    {
+      "name": "story",
+      "source": "./story",
+      "description": "The story example's agents (spec-author, implementer, reviewer), its spec-format skill and the merge guard",
+      "version": "0.2.0",
+      "license": "Apache-2.0"
+    },
+    {
+      "name": "triage",
+      "source": "./triage",
+      "description": "The triage example's agent (triager)",
+      "version": "0.1.0",
+      "license": "Apache-2.0"
+    }
+  ]
+}
