@@ -2,6 +2,8 @@
 
 Ready-made `.fab0/` setups for [fab0](https://github.com/fab0-dev/fab0): complete, working sets of wiring files for one way of working, which you copy into a project.
 
+> **Frozen.** fab0 is being rebuilt as a toolkit for building factories, and the `story` recipe here is broken against the coming core. This repository becomes `fab0-examples` during the refactor; see [REFACTOR.md](https://github.com/fab0-dev/fab0/blob/main/REFACTOR.md). Don't copy a recipe into a new project until then.
+
 A recipe is copied, not installed:
 - **The copied files are yours.** Edit them freely; your pipeline changes only through a commit in your project.
 - **The recipe and the plugins move separately.** The behaviour the files point at (agents and skills) comes from plugins, which follow their marketplace's releases with auto-update. A recipe update reaches a project only when someone copies it again.

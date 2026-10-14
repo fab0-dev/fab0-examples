@@ -2,6 +2,8 @@
 
 Recipes: complete `.fab0/` setups that projects copy. The product's home repo is `fab0-dev/fab0`, a sibling checkout; its `CLAUDE.md` holds the working rules and principles that apply here too.
 
+**Frozen during the refactor.** [REFACTOR.md](https://github.com/fab0-dev/fab0/blob/main/REFACTOR.md) in the home repo governs; step R5 turns this repository into `fab0-examples`. Make no change here before R5.
+
 - Each recipe is a directory with:
   - a `README.md`: when to use it, how to copy it, its setup checklist;
   - a `.fab0/` that copies as is;
