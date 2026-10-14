@@ -3,7 +3,7 @@ step: spec
 agent: spec-author
 model: deep
 skills: [spec-format]
-inputs: [intent]
+inputs: [intent, reviews]
 outputs: [spec, tasks]
 repos: {write: [home], read: [all]}
 paths: ["specs/{run}.md", "work/{run}/tasks.yaml"]

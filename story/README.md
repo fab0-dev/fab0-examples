@@ -8,7 +8,7 @@ Delivery of one work item, a GitHub issue of type **Story**, on its own branch:
 | `spec` | `spec-author` agent | `specs/<run>.md` and `work/<run>/tasks.yaml`, on the sub-branch `fab0/<run>/spec` | **human**: the product owner merges the spec's pull request into the run branch |
 | tasks | `apply` | A Task sub-issue per task, blocked by the sub-issues of the tasks it depends on | — |
 | `implement`, per task | `implementer` agent | The task's files, with tests, on `fab0/<run>/implement-<task>`. Tasks run in parallel where their files don't overlap and their order allows | **auto**: the `reviewer` agent; on approval and green checks, `apply` merges the task into the run branch. Two rejections, or an escalation, hand it to a person |
-| end | `apply` | Brings `main` into the run branch, removes the task list, and marks the run pull request ready | **human**: a person merges the run into `main` |
+| end | `apply` | Closes the Task sub-issues, brings `main` into the run branch, removes the task list, and marks the run pull request ready | **human**: a person merges the run into `main` |
 
 People take part at two points: approving the spec, and merging the finished run. Everything between is agents, unless a gate hands something to a person, or a person changes the order of tasks with blocked-by relations on their sub-issues.
 
@@ -74,7 +74,9 @@ The `fab0:github` skill checks all of this: ask Claude Code to set up GitHub for
 ## Use
 
 1. Open an issue of type Story and write the intent in its body.
-2. The product owner runs `/fab0:run <issue>`. The spec's pull request opens against the run branch. Ask for changes with a pull request review and run `/fab0:run <issue>` again; merging it approves the spec.
+2. The product owner runs `/fab0:run <issue>`. The spec's pull request opens against the run branch. Ask for changes, or answer the agent's questions, with a pull request review, then run `/fab0:run <issue>` again. Use a review, not a conversation comment: only reviews reach the agent. On your own pull request GitHub allows only a **Comment** review, and that is enough. Merging the pull request approves the spec.
+
+   Keep the home checkout on `main` while a run goes on: the engine reads the wiring from it, and warns when it is on another branch.
 3. Anyone runs `/fab0:run <issue>`. Tasks are implemented, reviewed and merged in parallel, as far as their files and dependencies allow. Run it again after a person answers questions or decides an escalation.
 4. `/fab0:inbox` shows what each run waits for and on whom.
 5. A person reviews the run pull request and merges it into `main`, which closes the Story.

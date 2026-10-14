@@ -16,6 +16,9 @@ steps:
     steps:
       - step: implement
         gate: {auto: {agent: reviewer, model: deep}, merge: auto, retry: 2, then: human}
+    # Task pull requests merge into the run branch, which closes no issue: close the tasks' items here.
+    onEnd:
+      - tracker.child.close: {type: Task}
 onEnd:
   - git.sync-base
   - git.remove-run-artifacts
