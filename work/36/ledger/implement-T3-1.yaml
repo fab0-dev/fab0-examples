@@ -1,0 +1,22 @@
+step: implement
+attempt: 1
+executor: agent
+actor: eugenefurs
+branch: fab0/36/implement-T3
+unit: T3
+model: sonnet
+base:
+  branch: fab0/36/base
+  sha: 1508b392f4922ac2e2292933de4007a262328b63
+inputs:
+  spec: sha256:f09d2169763c98bf62794bad6a79ca41d4be6078242eaedf33f8c85ab35e9ebe
+  tasks: sha256:bfe84a55fe49d15a19432e31b0be032cf76c479155c2bd15a2cfe757eaa58817
+  unit: sha256:fc04a40ea20949f30599cdc272a341d911c02af3c22f8681d5825ae0062f1fe6
+  reviews: sha256:4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945
+claims:
+- examples:story/README.md
+gate:
+  type: auto
+summary: 'Edited story/README.md (S9): it now tells the product owner that a Comment
+  review or a conversation comment on the spec''s pull request reaches the agent,
+  and no longer says to avoid conversation comments.'
