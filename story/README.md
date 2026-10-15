@@ -74,7 +74,7 @@ The `fab0:github` skill checks all of this: ask Claude Code to set up GitHub for
 ## Use
 
 1. Open an issue of type Story and write the intent in its body.
-2. The product owner runs `/fab0:run <issue>`. The spec's pull request opens against the run branch. Ask for changes, or answer the agent's questions, with a pull request review, then run `/fab0:run <issue>` again. Use a review, not a conversation comment: only reviews reach the agent. On your own pull request GitHub allows only a **Comment** review, and that is enough. Merging the pull request approves the spec.
+2. The product owner runs `/fab0:run <issue>`. The spec's pull request opens against the run branch. Ask for changes, or answer the agent's questions, with a **Comment** review or a conversation comment on the pull request, then run `/fab0:run <issue>` again. Either reaches the agent. On your own pull request GitHub allows only a **Comment** review, and that is enough; a plain conversation comment works too. Merging the pull request approves the spec.
 
    Keep the home checkout on `main` while a run goes on: the engine reads the wiring from it, and warns when it is on another branch.
 3. Anyone runs `/fab0:run <issue>`. Tasks are implemented, reviewed and merged in parallel, as far as their files and dependencies allow. Run it again after a person answers questions or decides an escalation.
