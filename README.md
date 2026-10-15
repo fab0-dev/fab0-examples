@@ -2,8 +2,6 @@
 
 Example factories for [fab0](https://github.com/fab0-dev/fab0), the toolkit for building and operating software factories. Each example is a complete, working factory for one way of working: its `.fab0/` wiring, its agents and skills, and the settings it needs. Copy one into a project and make it yours.
 
-> **Refactor in progress.** These examples are on fab0's schema 2, which the current `fab0` release (0.5) doesn't read. Use them once `fab0` 0.6 is released; see [REFACTOR.md](https://github.com/fab0-dev/fab0/blob/main/REFACTOR.md).
-
 ## Examples
 
 | Example | What it shows |

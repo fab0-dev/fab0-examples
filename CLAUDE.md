@@ -1,6 +1,6 @@
 # fab0-examples
 
-Example factories that projects copy. The product's home repo is `fab0-dev/fab0`, a sibling checkout; its `CLAUDE.md` holds the working rules and principles that apply here too. Until step R8 of its [REFACTOR.md](https://github.com/fab0-dev/fab0/blob/main/REFACTOR.md), that file governs, and nothing here is tagged.
+Example factories that projects copy. The product's home repo is `fab0-dev/fab0`, a sibling checkout; its `CLAUDE.md` holds the working rules and principles that apply here too.
 
 - An example is a directory that is also a plugin of this repository's marketplace:
   - `.fab0/`: the wiring, copied as is into a project, then edited where it says `EDIT`;
