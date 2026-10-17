@@ -55,7 +55,7 @@ Edit `.fab0/fab0.yaml`:
 
 1. **Issue types:** the organisation needs `Story` and `Task`. An organisation owner adds them in the organisation's settings, under issue types.
 2. **The runs repository** named in `store.github`, if the product has none yet:
-   - private;
+   - private if your GitHub plan allows a ruleset on a private repository, else public: the ruleset matters more, and a public one holds nothing your public repositories don't;
    - a ruleset on `main` that blocks force pushes and deletion, so its history stays append-only. It needs no required pull request and no checks: the engine pushes to `main` directly, with each person's own login;
    - write access for everyone in `people`. The product owner merges spec pull requests there, and only a merge by someone in `product-owner` approves a spec.
 3. **The base branch:** protect `main` with a ruleset that requires a pull request, with your tests as required checks. Leave `fab0/**` branches unprotected: `apply` merges approved tasks into run branches.

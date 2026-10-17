@@ -28,7 +28,7 @@ There are no pull requests, and nothing is committed to your repository. The run
    ```
 2. Edit `.fab0/fab0.yaml` (the repository, the people in `support` and `on-call`, the tracker owner, and the runs repository in `store`) and `.fab0/areas.txt`.
 3. Create the labels `needs-triage`, `triaging`, `severity-low`, `severity-medium`, `severity-high`, and `area-<area>` for each area.
-4. Create the runs repository named in `store.github`, if the product has none yet: private, with a ruleset that blocks force pushes to `main` and its deletion, and write access for everyone in `people`. The `fab0:github` skill checks the labels and the runs repository, and creates the runs repository when you ask.
+4. Create the runs repository named in `store.github`, if the product has none yet: private if your GitHub plan allows a ruleset on a private repository, else public, with a ruleset that blocks force pushes to `main` and its deletion, and write access for everyone in `people`. The `fab0:github` skill checks the labels and the runs repository, and creates the runs repository when you ask.
 5. Install [`uv`](https://docs.astral.sh/uv/), trust the folder in Claude Code, and install the plugin: `claude plugin install fab0@fab0 --scope project`. Check with `fab0-resolve validate`: it also checks that the runs repository can be reached.
 
 ## Use
