@@ -1,6 +1,7 @@
-# from fab0-dev/fab0-examples story--v0.2.0
-# A delivery factory: a product owner's spec and task list, then each task implemented by an agent,
-# reviewed by another agent and merged into the run's branch; a person merges the run into main.
+# from fab0-dev/fab0-examples story--v0.3.0
+# A delivery factory: a product owner's spec and task list, reviewed in the runs repository, then each task
+# implemented by an agent, reviewed by another agent and merged into the run's branch; a person merges the run
+# into main. Your repositories receive only the tasks' changes.
 schema: 2
 repos:
   # EDIT: this repository, and one entry per repository tasks may change (sibling checkouts).
@@ -19,7 +20,9 @@ git:
   branching: run
   auto_merge: {into: [run]}
 parallel: {max: 3, cross_run: warn}
-ledger: {path: "work/{run}/ledger"}
+# EDIT: the runs repository, which holds what runs produce for themselves: their ledger, specs and task lists,
+# and the specs' review pull requests. Every factory of a product shares one.
+store: {github: OWNER/REPO-runs}
 models:
   claude-code: {deep: opus, balanced: sonnet, fast: haiku}
 profiles:

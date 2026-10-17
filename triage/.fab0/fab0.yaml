@@ -1,6 +1,6 @@
-# from fab0-dev/fab0-examples triage--v0.1.0
+# from fab0-dev/fab0-examples triage--v0.2.0
 # Not a delivery factory: new bug reports are classified in the tracker, checked, labelled, and escalated to
-# on-call when severe. No pull requests; the run's record lives on the ledger branch.
+# on-call when severe. No pull requests: the run's record, its ledger, lives in the run store.
 schema: 2
 repos:
   home: {path: ., github: OWNER/REPO, owner: support} # EDIT
@@ -10,7 +10,8 @@ people:
   on-call: {github: [USER]}
 tracker: {kind: github, owner: OWNER} # EDIT
 git: {branching: flat}
-ledger: {path: "triage/{run}", branch: fab0/ledger}
+# EDIT: the runs repository, which holds what runs produce for themselves; every factory of a product shares one.
+store: {github: OWNER/REPO-runs}
 models:
   claude-code: {deep: opus, balanced: sonnet, fast: haiku}
 pipelines: [triage]

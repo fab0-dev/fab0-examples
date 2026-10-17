@@ -4,7 +4,8 @@
   `"$comment"`, or an HTML comment after a Markdown file's front matter);
 - the JSON files parse;
 - the merge guard blocks what it must and lets the rest through;
-- `fab0-resolve validate` accepts the wiring.
+- `fab0-resolve validate` accepts the wiring, with the runs repository its `store` names standing in a local folder
+  (git's `url.<base>.insteadOf` sends https://github.com/ there), as it would once the project set it up.
 
 The engine is $FAB0_RESOLVE, else a sibling fab0-core checkout's, else `fab0-resolve` on PATH.
 
@@ -13,6 +14,7 @@ The engine is $FAB0_RESOLVE, else a sibling fab0-core checkout's, else `fab0-res
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -96,6 +98,21 @@ def check_guard(guard: Path, project: Path) -> list[str]:
     return problems
 
 
+def runs_repository(project: Path, github: Path) -> dict:
+    """A bare repository where the wiring's `store.github` points, under `github`; the environment that sends
+    https://github.com/ there."""
+    found = re.search(r"^store:.*github:\s*([\w.-]+/[\w.-]+)", (project / ".fab0" / "fab0.yaml").read_text(), re.M)
+    if found:
+        bare = github / f"{found.group(1)}.git"
+        subprocess.run(["git", "init", "-q", "--bare", "-b", "main", str(bare)], check=True)
+    return {
+        **os.environ,
+        "GIT_CONFIG_COUNT": "1",
+        "GIT_CONFIG_KEY_0": f"url.{github}/.insteadOf",
+        "GIT_CONFIG_VALUE_0": "https://github.com/",
+    }
+
+
 def check(example: Path, resolve: str) -> list[str]:
     version = json.loads((example / ".claude-plugin" / "plugin.json").read_text())["version"]
     source = f"# from fab0-dev/fab0-examples {example.name}--v{version}"
@@ -109,7 +126,8 @@ def check(example: Path, resolve: str) -> list[str]:
         guard = project / ".claude" / "hooks" / "merge-guard.py"
         if guard.is_file():
             problems += check_guard(guard, project)
-        run = subprocess.run([resolve, "validate", "--project", str(project)], capture_output=True, text=True)
+        env = runs_repository(project, Path(tmp) / "github")
+        run = subprocess.run([resolve, "validate", "--project", str(project)], capture_output=True, text=True, env=env)
         if run.returncode:
             try:
                 errors = json.loads(run.stdout).get("errors") or [json.loads(run.stdout)]

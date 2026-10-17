@@ -1,12 +1,13 @@
-# from fab0-dev/fab0-examples triage--v0.1.0
+# from fab0-dev/fab0-examples triage--v0.2.0
 pipeline: triage
 trigger: {issue: {label: needs-triage}}
 onStart:
   - tracker.label: {add: [triaging], remove: [needs-triage]}
 steps:
   - step: classify
-    # A command gate: the project's own check of the classification. Two rejections stop the run.
-    gate: {auto: {command: "uv run --quiet --script .fab0/checks/classification.py {run}"}, retry: 1, then: fail}
+    # A command gate: the project's own check of the classification, given the attempt it judges. Two
+    # rejections stop the run.
+    gate: {auto: {command: "uv run --quiet --script .fab0/checks/classification.py {run} {attempt}"}, retry: 1, then: fail}
   - step: label
     action: tracker.label
     with: {add: ["severity-{classify.severity}", "area-{classify.area}"]}

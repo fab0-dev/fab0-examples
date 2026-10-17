@@ -1,4 +1,4 @@
-# from fab0-dev/fab0-examples triage--v0.1.0
+# from fab0-dev/fab0-examples triage--v0.2.0
 step: classify
 agent: triager
 model: fast

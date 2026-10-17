@@ -1,14 +1,17 @@
 """Exit check for the `story` agents: headless Claude Code runs the story example end to end on a small
 codebase, through `/fab0:run`, against a fake tracker (FAB0_GH_FAKE) and a bare `origin`.
 
-1. The first session runs the spec: `spec-author` writes the spec and the task list, which `record` checks.
-   The run then waits on the product owner's gate.
-2. This script merges the spec into the run branch, as the product owner would by merging its pull request.
+1. The first session runs the spec: `spec-author` writes the spec and the task list, which `record` checks and
+   keeps in the run store. The run then waits on the product owner's gate, in a review pull request of the runs
+   repository (a local bare repository, where git's `url.<base>.insteadOf` sends https://github.com/).
+2. This script merges that pull request, as the product owner would.
 3. The second session runs every task: `implementer` per task, `reviewer` as each task's gate. `apply` merges
    approved tasks into the run branch, and the run ends waiting for a person to merge it into main.
 
-Then the run branch's tests must pass. It costs tokens and needs a logged-in `claude`, and the engine of a
-sibling fab0-core checkout (or $FAB0_CORE, the path of its `plugins/fab0`).
+Then the run branch's tests must pass, and the product repository must hold only the tasks' changes.
+
+It costs tokens and needs a logged-in `claude`, and the engine of a sibling fab0-core checkout (or $FAB0_CORE,
+the path of its `plugins/fab0`).
 
     uv run python scripts/check-agents.py [--model sonnet] [--budget 5] [--keep]
 """
@@ -105,7 +108,11 @@ Run the tests with `python3 -m unittest discover -s tests -t .`.
 SETTINGS = {
     "permissions": json.loads((ROOT / "story" / "claude-settings.json").read_text())["permissions"],
     "hooks": json.loads((ROOT / "story" / "claude-settings.json").read_text())["hooks"],
+    # the engine under test first on PATH: an installed fab0 plugin's bin would come before --plugin-dir's
+    "env": {"PATH": f"{CORE / 'bin'}{os.pathsep}{os.environ['PATH']}"},
 }
+RUNS = "acme/hotel-runs"
+REVIEW = "fab0/hotel/1/spec"  # the spec's review branch in the runs repository
 
 
 def git(path: Path, *args: str) -> str:
@@ -132,20 +139,29 @@ class Check:
             (self.home / rel).write_text(body)
         (self.home / "tests" / "test_booking.py").write_text(TESTS)
         (self.home / "README.md").write_text(README)
+        (self.home / ".gitignore").write_text("__pycache__/\n")  # what running the tests leaves is no one's change
         git(self.home, "config", "user.email", "check@example.com")
         git(self.home, "config", "user.name", "check")
         git(self.home, "add", "-A")
         git(self.home, "commit", "-q", "-m", "start")
+        self.start = git(self.home, "rev-parse", "HEAD")
         bare = self.tmp / "remotes" / "hotel.git"
         bare.parent.mkdir()
         git(self.tmp, "init", "-q", "--bare", str(bare))
         git(self.home, "remote", "add", "origin", str(bare))
         git(self.home, "push", "-q", "origin", "main")
+        self.runs = self.tmp / "github" / f"{RUNS}.git"
+        git(self.tmp, "init", "-q", "--bare", "-b", "main", str(self.runs))
         issue = {"title": "Extend a booking", "body": INTENT, "type": "Story"}
         self.gh.write_text(json.dumps({"user": "po-user", "issues": {"acme/hotel#1": issue}}, indent=2))
 
     def env(self) -> dict:
-        return {**os.environ, "FAB0_GH_FAKE": str(self.gh)}
+        github = {
+            "GIT_CONFIG_COUNT": "1",
+            "GIT_CONFIG_KEY_0": f"url.{self.tmp / 'github'}/.insteadOf",
+            "GIT_CONFIG_VALUE_0": "https://github.com/",
+        }
+        return {**os.environ, "FAB0_GH_FAKE": str(self.gh), **github}
 
     def claude(self, prompt: str) -> None:
         args = ["claude", "-p", prompt, "--plugin-dir", str(CORE), "--settings", str(self.tmp / "settings.json")]
@@ -175,25 +191,41 @@ class Check:
             self.failures.append(what)
 
     def merge_spec(self) -> None:
-        """What the product owner does: merge the spec's pull request into the run branch."""
+        """What the product owner does: merge the spec's review pull request in the runs repository."""
         tree = self.tmp / "merge"
-        git(self.home, "worktree", "add", "-q", str(tree), "fab0/1/base")
-        git(tree, "merge", "-q", "--no-ff", "-m", "Merge the spec", "fab0/1/spec")
-        git(tree, "push", "-q", "origin", "fab0/1/base")
-        git(self.home, "worktree", "remove", str(tree))
+        git(self.tmp, "clone", "-q", str(self.runs), str(tree))
+        git(tree, "config", "user.email", "po@example.com")
+        git(tree, "config", "user.name", "po-user")
+        git(tree, "merge", "-q", "--no-ff", "-m", "Merge the spec", f"origin/{REVIEW}")
+        git(tree, "push", "-q", "origin", "main")
+        shutil.rmtree(tree)
         data = json.loads(self.gh.read_text())
-        for pull in data.get("pulls", {}).get("acme/hotel", []):
-            if pull["branch"] == "fab0/1/spec":
-                pull["state"] = "merged"
+        for pull in data.get("pulls", {}).get(RUNS, []):
+            if pull["branch"] == REVIEW:
+                pull.update(state="merged", merged_by="po-user")
         self.gh.write_text(json.dumps(data, indent=2))
+
+    def empty_commits(self) -> list[str]:
+        """Commits on any branch of the product repository that change nothing."""
+        found = []
+        for line in git(self.home, "rev-list", "--all", "--parents").splitlines():
+            commit, *parents = line.split()
+            if len(parents) == 1 and git(self.home, "rev-parse", f"{commit}^{{tree}}") == git(
+                self.home, "rev-parse", f"{parents[0]}^{{tree}}"
+            ):
+                found.append(git(self.home, "log", "-1", "--format=%s", commit))
+        return found
 
     def run(self) -> int:
         self.setup()
         self.claude("/fab0:run 1 --profile cheap")
         spec = self.units().get("spec", {})
         self.expect(spec.get("reason") == {"gate": "human"}, f"the spec waits on its owner ({spec.get('reason')})")
-        pulls = json.loads(self.gh.read_text()).get("pulls", {}).get("acme/hotel", [])
-        self.expect(any(p["branch"] == "fab0/1/spec" for p in pulls), "the spec has a pull request")
+        pulls = json.loads(self.gh.read_text()).get("pulls", {})
+        self.expect(any(p["branch"] == REVIEW for p in pulls.get(RUNS, [])), "the spec has a review pull request")
+        self.expect(not pulls.get("acme/hotel"), "the product repository has no pull request yet")
+        review = git(self.runs, "ls-tree", "-r", "--name-only", REVIEW, "--", "runs/hotel/1/review/spec")
+        self.expect(len(review.split()) == 2, f"the spec and the task list are on its branch ({review.split()})")
         if self.failures:
             return self.finish()
 
@@ -211,8 +243,14 @@ class Check:
             [sys.executable, "-m", "unittest", "discover", "-s", "tests", "-t", "."], cwd=tree, capture_output=True
         )
         self.expect(tests.returncode == 0, "the run branch's tests pass")
-        self.expect((tree / "specs" / "1.md").is_file(), "the spec is on the run branch")
-        self.expect(not (tree / "work" / "1" / "tasks.yaml").exists(), "the task list was removed at the end")
+        files = git(self.home, "log", "--all", "--name-only", "--format=", "--not", self.start).split()
+        run_files = sorted(set(files))  # every file a commit of the run touched
+        only_code = bool(run_files) and all(f.startswith(("hotel/", "tests/")) for f in run_files)
+        self.expect(only_code, f"the run's commits touch only code and tests ({run_files})")
+        self.expect(self.empty_commits() == [], f"no empty commit in the product repository ({self.empty_commits()})")
+        stored = git(self.runs, "ls-tree", "-r", "--name-only", "main", "--", "runs/hotel/1")
+        self.expect("runs/hotel/1/ledger/spec-1.yaml" in stored, "the ledger is in the runs repository")
+        self.expect("runs/hotel/1/review/spec/spec.md" in stored, "the approved spec is in the runs repository")
         return self.finish()
 
     def finish(self) -> int:
