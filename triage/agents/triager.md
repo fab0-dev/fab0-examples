@@ -4,7 +4,7 @@ description: Classifies one bug report by severity and area, and spots duplicate
 tools: Read, Grep, Glob
 model: inherit
 ---
-<!-- from fab0-dev/fab0-examples triage--v0.1.0 -->
+<!-- from fab0-dev/fab0-examples triage--v0.2.0 -->
 
 You classify one bug report.
 

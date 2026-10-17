@@ -4,11 +4,13 @@ Delivery of one work item, a GitHub issue of type **Story**, on its own branch:
 
 | Step | Who | What | Gate |
 |---|---|---|---|
-| start | `apply` | The run branch `fab0/<run>/base` in every repository the run writes, and a draft run pull request into `main` that closes the Story | — |
-| `spec` | `spec-author` agent | `specs/<run>.md` and `work/<run>/tasks.yaml`, on the sub-branch `fab0/<run>/spec` | **human**: the product owner merges the spec's pull request into the run branch |
+| start | `apply` | The run branch `fab0/<run>/base` in every repository the run writes, with no commit. A repository gets its draft run pull request into `main`, which closes the Story, once its run branch has work | — |
+| `spec` | `spec-author` agent | The spec (Markdown) and the task list (YAML), kept in the run store, not in your repositories | **human**: the product owner merges the spec's review pull request in the runs repository |
 | tasks | `apply` | A Task sub-issue per task, blocked by the sub-issues of the tasks it depends on | — |
 | `implement`, per task | `implementer` agent | The task's files, with tests, on `fab0/<run>/implement-<task>`. Tasks run in parallel where their files don't overlap and their order allows | **auto**: the `reviewer` agent; on approval and green checks, `apply` merges the task into the run branch. Two rejections, or an escalation, hand it to a person |
-| end | `apply` | Closes the Task sub-issues, brings `main` into the run branch, removes the task list, and marks the run pull request ready | **human**: a person merges the run into `main` |
+| end | `apply` | Closes the Task sub-issues, brings `main` into the run branch, and marks each run pull request ready | **human**: a person merges the run into `main` |
+
+Your repositories receive only the tasks' changes. What a run produces for itself (its ledger, the spec, the task list) goes into the run store: a runs repository beside yours, which every fab0 factory of the product shares. A repository the run only reads gets no commit and no pull request.
 
 People take part at two points: approving the spec, and merging the finished run. Everything between is agents, unless a gate hands something to a person, or a person changes the order of tasks with blocked-by relations on their sub-issues.
 
@@ -46,17 +48,22 @@ Edit `.fab0/fab0.yaml`:
 - **`repos`:** this repository as `home`, and one entry per other repository tasks may change. Each is a sibling checkout on every machine that runs fab0. A repository's `owner` is the role whose turn its tasks are when a gate hands one to a person.
 - **`people`:** the GitHub users in each role.
 - **`tracker`:** the owner of the issues, and optionally a GitHub Project to show each item's state in a text field (`fields: {signal: <field name>}`).
+- **`store`:** the runs repository, `OWNER/<name>`. If the product already has one, for another factory, name the same one: each factory keeps its runs apart under `store.project`, which defaults to this repository's name.
 - **`profiles`:** `cheap` runs the deep steps on a cheaper model: `/fab0:run <run> --profile cheap`.
 
 ### 2. GitHub
 
 1. **Issue types:** the organisation needs `Story` and `Task`. An organisation owner adds them in the organisation's settings, under issue types.
-2. **The base branch:** protect `main` with a ruleset that requires a pull request, with your tests as required checks. Leave `fab0/**` branches unprotected: `apply` merges approved tasks into run branches.
-3. **Checks on run branches:** if your CI runs on pull requests into any branch, task pull requests get checks, and `apply` waits for them to pass before it merges.
-4. **Board (optional):** a GitHub Project with a text field named as in `tracker.fields.signal`.
-5. **Access:** everyone who runs fab0 needs `gh` logged in, with the `project` scope if there is a board: `gh auth refresh -s project`.
+2. **The runs repository** named in `store.github`, if the product has none yet:
+   - private;
+   - a ruleset on `main` that blocks force pushes and deletion, so its history stays append-only. It needs no required pull request and no checks: the engine pushes to `main` directly, with each person's own login;
+   - write access for everyone in `people`. The product owner merges spec pull requests there, and only a merge by someone in `product-owner` approves a spec.
+3. **The base branch:** protect `main` with a ruleset that requires a pull request, with your tests as required checks. Leave `fab0/**` branches unprotected: `apply` merges approved tasks into run branches.
+4. **Checks on run branches:** if your CI runs on pull requests into any branch, task pull requests get checks, and `apply` waits for them to pass before it merges.
+5. **Board (optional):** a GitHub Project with a text field named as in `tracker.fields.signal`.
+6. **Access:** everyone who runs fab0 needs `gh` logged in, with the `project` scope if there is a board: `gh auth refresh -s project`.
 
-The `fab0:github` skill checks all of this: ask Claude Code to set up GitHub for fab0.
+The `fab0:github` skill checks all of this, and creates the runs repository when you ask: ask Claude Code to set up GitHub for fab0.
 
 ### 3. Claude Code
 
@@ -66,7 +73,7 @@ The `fab0:github` skill checks all of this: ask Claude Code to set up GitHub for
    ```bash
    claude plugin install fab0@fab0 --scope project
    ```
-4. Check the wiring; it must print `"ok": true`:
+4. Check the wiring; it must print `"ok": true`. It also checks that the runs repository can be reached:
    ```bash
    fab0-resolve validate
    ```
@@ -74,9 +81,22 @@ The `fab0:github` skill checks all of this: ask Claude Code to set up GitHub for
 ## Use
 
 1. Open an issue of type Story and write the intent in its body.
-2. The product owner runs `/fab0:run <issue>`. The spec's pull request opens against the run branch. Ask for changes, or answer the agent's questions, with a **Comment** review or a conversation comment on the pull request, then run `/fab0:run <issue>` again. Either reaches the agent. On your own pull request GitHub allows only a **Comment** review, and that is enough; a plain conversation comment works too. Merging the pull request approves the spec.
+2. The product owner runs `/fab0:run <issue>`. The spec's review pull request opens in the runs repository, with the spec and the task list as readable files. Ask for changes, or answer the agent's questions, with a **Comment** review or a conversation comment on the pull request, then run `/fab0:run <issue>` again. Either reaches the agent. On your own pull request GitHub allows only a **Comment** review, and that is enough. You can also edit the files on the pull request's branch yourself: your edit counts as a new version of the spec, by you. Merging the pull request approves the spec, when someone in `product-owner` merges it. A merge by anyone else is noted on the pull request, and then a product owner's approving review there approves it.
 
    Keep the home checkout on `main` while a run goes on: the engine reads the wiring from it, and warns when it is on another branch.
 3. Anyone runs `/fab0:run <issue>`. Tasks are implemented, reviewed and merged in parallel, as far as their files and dependencies allow. Run it again after a person answers questions or decides an escalation.
 4. `/fab0:inbox` shows what each run waits for and on whom.
-5. A person reviews the run pull request and merges it into `main`, which closes the Story.
+5. A person reviews each run pull request and merges it into `main`. Each one closes the Story.
+
+## Keep the spec in a repository
+
+The spec here is a working file of the run: reviewed, then kept in the run store. If your product keeps its specs in a repository, make the spec a file there:
+
+1. In `.fab0/artifacts/spec.yaml`, replace `kind: store` and `store: {format: markdown}` with:
+   ```yaml
+   kind: file
+   file: {repo: home, path: "specs/{run}.md", format: markdown}
+   ```
+2. In `.fab0/steps/spec.yaml`, let the step write it: `repos: {write: [home], read: [all]}` and `paths: ["specs/{run}.md"]`.
+
+The spec's pull request then opens in your home repository against the run branch, and merging it there approves the spec. The task list stays in the run store, so it never reaches your repository, and it isn't in that pull request either: the reviewer finds it in the runs repository, under `runs/<project>/<run>/objects/`.

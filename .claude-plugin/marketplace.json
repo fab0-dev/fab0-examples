@@ -9,14 +9,14 @@
       "name": "story",
       "source": "./story",
       "description": "The story example's agents (spec-author, implementer, reviewer), its spec-format skill and the merge guard",
-      "version": "0.2.0",
+      "version": "0.3.0",
       "license": "Apache-2.0"
     },
     {
       "name": "triage",
       "source": "./triage",
       "description": "The triage example's agent (triager)",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "license": "Apache-2.0"
     }
   ]

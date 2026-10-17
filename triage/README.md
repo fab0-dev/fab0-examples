@@ -5,12 +5,12 @@ A factory that delivers no code. Each new bug report is classified, checked, lab
 | Step | Who | What | Gate |
 |---|---|---|---|
 | start | `apply` | Swaps the `needs-triage` label for `triaging` | — |
-| `classify` | `triager` agent | Severity, area, and a duplicate if there is one, as structured data | **auto**: a command checks the area against `.fab0/areas.txt`. One rejection is retried; a second stops the run |
+| `classify` | `triager` agent | Severity, area, and a duplicate if there is one, as structured data | **auto**: a command reads the attempt it judges and checks the area against `.fab0/areas.txt`. One rejection is retried; a second stops the run |
 | `label` | `apply` | Adds `severity-<severity>` and `area-<area>` | — |
 | `escalate`, when `severity-high` | `apply` | Assigns the report to the `on-call` role | — |
 | end | `apply` | Removes `triaging` and comments with the classification | — |
 
-There are no pull requests. The run's record, its ledger, lives on the `fab0/ledger` branch, which is pushed and never merged.
+There are no pull requests, and nothing is committed to your repository. The run's record, its ledger, lives in the run store: a runs repository beside your own, which every fab0 factory of the product shares.
 
 ## Files
 
@@ -26,9 +26,10 @@ There are no pull requests. The run's record, its ledger, lives on the `fab0/led
    ```bash
    cp -R ../fab0-examples/triage/.fab0 .fab0 && mkdir -p .claude/agents && cp ../fab0-examples/triage/agents/triager.md .claude/agents/
    ```
-2. Edit `.fab0/fab0.yaml` (the repository, the people in `support` and `on-call`, the tracker owner) and `.fab0/areas.txt`.
-3. Create the labels `needs-triage`, `triaging`, `severity-low`, `severity-medium`, `severity-high`, and `area-<area>` for each area. The `fab0:github` skill checks them.
-4. Install [`uv`](https://docs.astral.sh/uv/), trust the folder in Claude Code, and install the plugin: `claude plugin install fab0@fab0 --scope project`. Check with `fab0-resolve validate`.
+2. Edit `.fab0/fab0.yaml` (the repository, the people in `support` and `on-call`, the tracker owner, and the runs repository in `store`) and `.fab0/areas.txt`.
+3. Create the labels `needs-triage`, `triaging`, `severity-low`, `severity-medium`, `severity-high`, and `area-<area>` for each area.
+4. Create the runs repository named in `store.github`, if the product has none yet: private, with a ruleset that blocks force pushes to `main` and its deletion, and write access for everyone in `people`. The `fab0:github` skill checks the labels and the runs repository, and creates the runs repository when you ask.
+5. Install [`uv`](https://docs.astral.sh/uv/), trust the folder in Claude Code, and install the plugin: `claude plugin install fab0@fab0 --scope project`. Check with `fab0-resolve validate`: it also checks that the runs repository can be reached.
 
 ## Use
 
