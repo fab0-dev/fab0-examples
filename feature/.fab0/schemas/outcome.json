@@ -1,0 +1,66 @@
+{
+  "$comment": "from fab0-dev/fab0-examples feature--v0.1.0",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "A Story's wrap-up: whether its Feature is done, and the follow-up Stories it still needs",
+  "type": "object",
+  "required": [
+    "feature",
+    "summary",
+    "follow-ups"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "feature": {
+      "description": "`done` closes the Feature; `open` keeps it, with the follow-ups.",
+      "enum": [
+        "open",
+        "done"
+      ]
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 1
+    },
+    "follow-ups": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "intent"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^F[1-9][0-9]*$"
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1
+          },
+          "intent": {
+            "description": "The follow-up Story's body: what it is for, and why.",
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    }
+  },
+  "if": {
+    "properties": {
+      "feature": {
+        "const": "open"
+      }
+    }
+  },
+  "then": {
+    "properties": {
+      "follow-ups": {
+        "minItems": 1
+      }
+    }
+  }
+}

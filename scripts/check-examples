@@ -5,7 +5,10 @@
 - the JSON files parse;
 - the merge guard blocks what it must and lets the rest through;
 - `fab0-resolve validate` accepts the wiring, with the runs repository its `store` names standing in a local folder
-  (git's `url.<base>.insteadOf` sends https://github.com/ there), as it would once the project set it up.
+  (git's `url.<base>.insteadOf` sends https://github.com/ there), as it would once the project set it up;
+- an example that calls connected factories (`feature`) is checked with each of them beside it, a copy of the
+  example it names in CONNECTED with its home repository set as the parent's `factories` says, committed: the
+  parent's `validate` must check every connection.
 
 The engine is $FAB0_RESOLVE, else a sibling fab0-core checkout's, else `fab0-resolve` on PATH.
 
@@ -22,6 +25,9 @@ import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+# a parent example: per factory it calls, the example a project copies for it
+CONNECTED = {"feature": {"service": "delivery", "web": "delivery"}}
+FACTORY = re.compile(r"^  ([a-z][a-z0-9-]*): \{github: ([\w.-]+/[\w.-]+), path: ([^,}]+)", re.M)
 GUARD_CASES = {
     "gh pr merge 3 --squash": 2,
     "cd repo && gh pr merge 3": 2,
@@ -113,6 +119,22 @@ def runs_repository(project: Path, github: Path) -> dict:
     }
 
 
+def connect(example: Path, project: Path) -> None:
+    """Each factory the parent calls, beside it: a copy of its example, home repository as the parent names it,
+    committed, since `validate` reads a connected factory's wiring at its base branch."""
+    factories = {m[1]: (m[2], m[3].strip()) for m in FACTORY.finditer((project / ".fab0" / "fab0.yaml").read_text())}
+    for name, source in CONNECTED.get(example.name, {}).items():
+        github, path = factories[name]
+        child = (project / path).resolve()
+        assemble(ROOT / source, child)
+        wiring = child / ".fab0" / "fab0.yaml"
+        text = wiring.read_text()
+        wiring.write_text(text.replace("home: {path: ., github: OWNER/REPO,", f"home: {{path: ., github: {github},"))
+        who = ["-c", "user.name=check", "-c", "user.email=check@example.com"]
+        subprocess.run(["git", "-C", str(child), "add", "-A"], check=True)
+        subprocess.run(["git", "-C", str(child), *who, "commit", "-q", "-m", "start"], check=True)
+
+
 def check(example: Path, resolve: str) -> list[str]:
     version = json.loads((example / ".claude-plugin" / "plugin.json").read_text())["version"]
     source = f"# from fab0-dev/fab0-examples {example.name}--v{version}"
@@ -127,6 +149,7 @@ def check(example: Path, resolve: str) -> list[str]:
         if guard.is_file():
             problems += check_guard(guard, project)
         env = runs_repository(project, Path(tmp) / "github")
+        connect(example, project)
         run = subprocess.run([resolve, "validate", "--project", str(project)], capture_output=True, text=True, env=env)
         if run.returncode:
             try:
@@ -134,6 +157,11 @@ def check(example: Path, resolve: str) -> list[str]:
             except ValueError:
                 errors = [run.stdout + run.stderr]
             problems += [f"validate: {e}" for e in errors]
+        elif example.name in CONNECTED:
+            found = json.loads(run.stdout).get("factories", {})
+            for name in CONNECTED[example.name]:
+                if not found.get(name, {}).get("checked"):
+                    problems.append(f"validate: the connection to {name} isn't checked: {found.get(name, {}).get('why')}")
     return problems
 
 

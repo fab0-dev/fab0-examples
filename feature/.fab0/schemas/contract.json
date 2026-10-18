@@ -1,0 +1,45 @@
+{
+  "$comment": "from fab0-dev/fab0-examples feature--v0.1.0",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "The contract this run accepts from the factory that provides an interface",
+  "type": "object",
+  "required": [
+    "operations"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "operations": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "summary"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "summary": {
+            "type": "string",
+            "minLength": 1
+          },
+          "request": {
+            "description": "What a caller sends.",
+            "type": "object"
+          },
+          "response": {
+            "description": "What it gets back, per outcome.",
+            "type": "object"
+          }
+        }
+      }
+    },
+    "notes": {
+      "type": "string"
+    }
+  }
+}

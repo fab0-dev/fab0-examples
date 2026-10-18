@@ -1,0 +1,42 @@
+# from fab0-dev/fab0-examples feature--v0.1.0
+pipeline: story
+trigger: {issue: {type: Story}}
+onStart: []
+steps:
+  # What the Story needs, within its Feature, reviewed in a pull request of the runs repository: the product
+  # owner's merge approves it.
+  - step: requirements
+    gate: {human: {owner: product-owner}}
+  # The two factories build it side by side. The web client binds the contract the service hands back: its units
+  # that read it wait until this run accepts it, and the rest of its work goes ahead. An agent acknowledges what
+  # each one hands back, against what this run asked for; a rejection sends it back to that factory to rework.
+  - parallel:
+      service:
+        - call: {factory: service, pipeline: delivery}
+          id: service
+          inputs: {spec: spec}
+          outputs: {contract: contract, feedback: service-feedback}
+          gate: {auto: {agent: acceptor, model: deep}}
+      web:
+        - call: {factory: web, pipeline: delivery}
+          id: web
+          inputs: {spec: spec, upstream: contract}
+          outputs: {feedback: web-feedback}
+          gate: {auto: {agent: acceptor, model: deep}}
+  # The only judge of the Feature: from what every factory reports about its own area, whether the Feature is
+  # done, and the follow-up Stories it still needs. Reviewed like the requirements.
+  - step: wrap-up
+    gate: {human: {owner: product-owner}}
+  # Open: a follow-up Story per gap, under the same Feature; each is a run of its own when someone starts it.
+  # Done: the Feature closes.
+  - when: {artifact: outcome, path: feature, equals: open}
+    steps:
+      - step: follow-ups
+        action: tracker.items
+        with: {from: outcome, of: parent, type: Story, title: "{unit.title}", body: "{unit.intent}"}
+    else:
+      - step: close-feature
+        action: tracker.close
+        with: {item: parent}
+onEnd:
+  - tracker.close

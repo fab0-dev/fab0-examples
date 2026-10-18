@@ -1,0 +1,18 @@
+{
+  "name": "delivery",
+  "version": "0.1.0",
+  "description": "The delivery example's agents (planner, implementer, reviewer, reporter) and the merge guard: a connected factory that a parent calls, or that runs on its own",
+  "author": {
+    "name": "fab0-dev",
+    "url": "https://github.com/fab0-dev"
+  },
+  "homepage": "https://github.com/fab0-dev/fab0-examples/tree/main/delivery",
+  "repository": "https://github.com/fab0-dev/fab0-examples",
+  "license": "Apache-2.0",
+  "keywords": [
+    "fab0",
+    "delivery",
+    "contract",
+    "agents"
+  ]
+}
