@@ -1,0 +1,18 @@
+{
+  "name": "feature",
+  "version": "0.1.0",
+  "description": "The feature example's agents (analyst, acceptor) and the merge guard: the parent of a composition, which calls connected factories and wraps up from what they hand back",
+  "author": {
+    "name": "fab0-dev",
+    "url": "https://github.com/fab0-dev"
+  },
+  "homepage": "https://github.com/fab0-dev/fab0-examples/tree/main/feature",
+  "repository": "https://github.com/fab0-dev/fab0-examples",
+  "license": "Apache-2.0",
+  "keywords": [
+    "fab0",
+    "feature",
+    "composition",
+    "agents"
+  ]
+}

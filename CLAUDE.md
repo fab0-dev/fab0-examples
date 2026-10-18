@@ -22,4 +22,4 @@ scripts/check-examples
 claude plugin validate --strict .
 ```
 
-After changing an agent, a skill or the `story` wiring, run `python3 scripts/check-agents.py`. It costs tokens.
+After changing an agent, a skill or the `story` wiring, run `python3 scripts/check-agents.py`; after changing the `feature` or `delivery` example, `python3 scripts/check-agents.py --example feature`. Both cost tokens.

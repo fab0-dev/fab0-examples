@@ -1,0 +1,8 @@
+# from fab0-dev/fab0-examples feature--v0.1.0
+step: requirements
+agent: analyst
+model: deep
+inputs: [feature, story, reviews]
+outputs: [spec]
+return: {questions: optional}
+owner: product-owner

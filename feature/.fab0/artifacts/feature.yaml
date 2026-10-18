@@ -1,0 +1,4 @@
+# from fab0-dev/fab0-examples feature--v0.1.0
+artifact: feature
+kind: issue
+issue: {of: parent, part: body}

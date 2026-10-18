@@ -14,17 +14,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      # The engine of the release that the fab0 marketplace points at: what a project installs.
+      # The engine of fab0-core's main until fab0 0.8 is released (fab0-dev/fab0's MIGRATION.md, step N12): the
+      # feature and delivery examples need connected factories. Then back to the release the marketplace points at.
       - uses: actions/checkout@v4
         with:
           repository: fab0-dev/fab0-core
           path: .fab0-core
-          fetch-depth: 0
-      - name: Check out the current fab0 release
-        run: |
-          ref=$(jq -r '.plugins[] | select(.name == "fab0") | .source.ref' .fab0-core/.claude-plugin/marketplace.json)
-          echo "fab0 release: $ref"
-          git -C .fab0-core checkout -q "$ref"
+          ref: main
       - uses: astral-sh/setup-uv@v6
       - name: Every example copies into an empty repository and validates
         run: FAB0_RESOLVE=.fab0-core/plugins/fab0/bin/fab0-resolve scripts/check-examples
