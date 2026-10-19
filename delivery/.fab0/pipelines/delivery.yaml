@@ -30,4 +30,4 @@ steps:
   - step: report
 onEnd:
   - git.sync-base
-  - pr.ready
+  - pr.ready # a person merges the run; pr.merge in its place merges it, when git.auto_merge allows the base

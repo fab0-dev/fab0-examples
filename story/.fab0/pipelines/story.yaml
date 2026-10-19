@@ -6,7 +6,7 @@ onStart:
   - pr.open-run: {draft: true}
 steps:
   # The spec and its task list, kept in the run store and reviewed in a pull request of the runs repository:
-  # the product owner's merge approves them.
+  # the product owner's approving review approves them, and fab0 merges it.
   - step: spec
     gate: {human: {owner: product-owner}}
   # One unit per task, in parallel where their files don't overlap and their order allows.
@@ -22,4 +22,4 @@ steps:
       - tracker.child.close: {type: Task}
 onEnd:
   - git.sync-base
-  - pr.ready
+  - pr.ready # a person merges the run; pr.merge in its place merges it, when git.auto_merge allows the base

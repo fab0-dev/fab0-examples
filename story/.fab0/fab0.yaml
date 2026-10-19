@@ -19,6 +19,9 @@ git:
   base: main
   branching: run
   auto_merge: {into: [run]}
+  # A run nobody merges: apply merges it into main once every gate has passed, with pr.merge in place of
+  # pr.ready at the end of pipelines/story.yaml.
+  # auto_merge: {into: [run, base], allow_base: true}
 parallel: {max: 3, cross_run: warn}
 # EDIT: the runs repository, which holds what runs produce for themselves: their ledger, specs and task lists,
 # and the specs' review pull requests. Every factory of a product shares one.
