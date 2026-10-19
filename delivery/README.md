@@ -45,4 +45,4 @@ mkdir -p .claude/agents .claude/hooks && cp ../fab0-examples/delivery/agents/*.m
 
 Edit `.fab0/fab0.yaml`: `repos.home` as the parent's `factories` names this repository; `people`; the parent's tracker owner; the parent's runs repository under `store`. Commit it to `main`, where the parent reads it. On GitHub: the label `delivery` in this repository, and the `Task` issue type.
 
-Run `/fab0:run <item>` here when `/fab0:inbox` lists a run: a call filed it, or someone labelled an item `delivery`.
+Run `/fab0:run` here when `/fab0:inbox` lists a run: a call started it, under the caller's run id, or someone labelled an item `delivery` and started it with `/fab0:run #<item>`. With `/fab0-watch` on, the session takes the run up as soon as the call starts it. Approve the plan's review pull request with an approving review, or with a comment `/approve` on one you opened: fab0 merges it.

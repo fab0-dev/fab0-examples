@@ -1,5 +1,5 @@
 {
-  "$comment": "from fab0-dev/fab0-examples feature--v0.1.0",
+  "$comment": "from fab0-dev/fab0-examples feature--v0.2.0",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "A Story's wrap-up: whether its Feature is done, and the follow-up Stories it still needs",
   "type": "object",

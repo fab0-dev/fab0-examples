@@ -13,7 +13,7 @@ Example factories for [fab0](https://github.com/fab0-dev/fab0), the toolkit for 
 
 ## Copy or install
 
-**Copy** (recommended). The files become yours: versioned with your project, editable, and a diff against a newer release shows what changed. Every copied file names its source and release on its first line, for example `# from fab0-dev/fab0-examples story--v0.3.0`. Each example's README lists what to copy where.
+**Copy** (recommended). The files become yours: versioned with your project, editable, and a diff against a newer release shows what changed. Every copied file names its source and release on its first line, for example `# from fab0-dev/fab0-examples story--v0.4.0`. Each example's README lists what to copy where.
 
 **Install** the example's agents, skills and hooks as a plugin instead, if you want updates without owning the files. The wiring in `.fab0/` is always copied. Then name the agents and skills with the plugin's prefix in your steps, for example `agent: story:spec-author` and `skills: [story:spec-format]`.
 

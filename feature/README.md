@@ -59,4 +59,4 @@ In each code repository, copy the [`delivery`](../delivery/) example as its READ
 
 ## Run it
 
-File a Feature, with its goal and how you'll know it is done, then a Story under it. Run `/fab0:run <story>` here. It stops while the teams work: `/fab0:inbox` in each code repository lists its run, and its people run it there with `/fab0:run <their item>`. Run `/fab0:run <story>` here again to acknowledge what comes back and to wrap up.
+File a Feature, with its goal and how you'll know it is done, then a Story under it. Run `/fab0:run #<story>` here. The run takes its id from the runs repository, and each team's child run shares it. It stops while the teams work: `/fab0:inbox` in each code repository lists the run under that id, and its people run it there with `/fab0:run`. Run `/fab0:run` here again to acknowledge what comes back and to wrap up. With `/fab0-watch` on in each checkout, nobody types those commands: people only review, with an approving review, or a comment `/approve` on a pull request they opened.

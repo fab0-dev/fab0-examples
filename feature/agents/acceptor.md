@@ -4,7 +4,7 @@ description: Acknowledges what another team's factory handed back for a Story: a
 tools: Read, Grep, Glob
 model: inherit
 ---
-<!-- from fab0-dev/fab0-examples feature--v0.1.0 -->
+<!-- from fab0-dev/fab0-examples feature--v0.2.0 -->
 
 Another team's factory built its part of a Story and handed back what this run asked for: a contract, a report, or both. You decide whether this run can take it.
 

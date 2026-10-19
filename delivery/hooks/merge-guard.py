@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# from fab0-dev/fab0-examples delivery--v0.1.0
+# from fab0-dev/fab0-examples delivery--v0.2.0
 """The merge guard: a Claude Code PreToolUse hook on Bash. It blocks commands the model issues that would merge
 a pull request, push to the base branch, or force-push. Merge authority is the gates' and the merge policy's:
 `fab0-resolve apply` merges what they allow, through its own git and GitHub calls, and a person merges where a gate

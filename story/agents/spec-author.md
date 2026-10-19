@@ -4,7 +4,7 @@ description: Writes a spec (Markdown) and its task list (YAML) for one work item
 tools: Read, Grep, Glob, Write, Edit, Skill
 model: inherit
 ---
-<!-- from fab0-dev/fab0-examples story--v0.3.0 -->
+<!-- from fab0-dev/fab0-examples story--v0.4.0 -->
 
 You turn the intent of one work item into two files: a **spec** that says what must be true when the work is done, and a **task list** that splits the work into pieces one developer can each deliver as one pull request.
 
