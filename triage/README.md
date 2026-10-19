@@ -33,4 +33,4 @@ There are no pull requests, and nothing is committed to your repository. The run
 
 ## Use
 
-Label a report `needs-triage` and run `/fab0:run <issue>`. `/fab0:inbox` lists the reports waiting to be triaged.
+Label a report `needs-triage` and run `/fab0:run #<issue>`. `/fab0:inbox` lists the reports waiting to be triaged.

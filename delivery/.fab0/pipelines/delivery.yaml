@@ -1,4 +1,4 @@
-# from fab0-dev/fab0-examples delivery--v0.1.0
+# from fab0-dev/fab0-examples delivery--v0.2.0
 pipeline: delivery
 # A call makes the item, with this label, as a sub-issue of the caller's item. A person may add it by hand too.
 trigger: {issue: {label: delivery}}

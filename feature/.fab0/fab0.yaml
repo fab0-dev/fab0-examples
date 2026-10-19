@@ -1,4 +1,4 @@
-# from fab0-dev/fab0-examples feature--v0.1.0
+# from fab0-dev/fab0-examples feature--v0.2.0
 # The parent of a composition: a Story of a Feature, specified by its product owner, built by connected factories
 # side by side (here a service and its web client, each a copy of the delivery example), and wrapped up from what
 # they hand back: follow-up Stories under the same Feature, or the Feature closed. This repository holds no code.

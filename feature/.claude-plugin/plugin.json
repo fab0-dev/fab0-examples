@@ -1,6 +1,6 @@
 {
   "name": "feature",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "The feature example's agents (analyst, acceptor) and the merge guard: the parent of a composition, which calls connected factories and wraps up from what they hand back",
   "author": {
     "name": "fab0-dev",
