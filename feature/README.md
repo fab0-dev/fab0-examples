@@ -9,9 +9,9 @@ The wrap-up either files follow-up Stories under the same Feature or closes it. 
 
 | Step | Who | What | Gate |
 |---|---|---|---|
-| `requirements` | `analyst` agent | The spec: intent, scope, `Done when` statements, the interfaces between the teams. Kept in the run store, not in your repositories | **human**: the product owner merges its review pull request in the runs repository |
+| `requirements` | `analyst` agent | The spec: intent, scope, `Done when` statements, the interfaces between the teams. Kept in the run store, not in your repositories | **human**: the product owner approves its review pull request in the runs repository, with an approving review; fab0 merges it |
 | `service`, `web`, side by side | the connected factories | Each call files an item in that factory's repository, labelled `delivery`, as a sub-issue of the Story, and its people run it there with `/fab0:run`. The service hands back its contract and a report; the web client builds against the contract and hands back its report. The web client's work that reads the contract waits until this run accepts it; the rest of its work goes ahead | **auto**: the `acceptor` agent acknowledges each thing a factory hands back. A rejection sends it back to that factory to rework, with the findings |
-| `wrap-up` | `analyst` agent | From every team's report, whether the Feature is done, and the follow-up Stories it still needs | **human**: the product owner merges its review pull request |
+| `wrap-up` | `analyst` agent | From every team's report, whether the Feature is done, and the follow-up Stories it still needs | **human**: the product owner approves its review pull request; fab0 merges it |
 | follow-ups | `apply` | When the Feature is still open: a Story per follow-up, under the same Feature, with its intent as its body. Each is a run of its own once someone starts it | — |
 | close | `apply` | When the Feature is done: it closes. The Story closes either way | — |
 

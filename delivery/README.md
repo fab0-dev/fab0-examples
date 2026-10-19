@@ -5,11 +5,11 @@ A connected factory: one team's delivery in its own repository. A parent factory
 | Step | Who | What | Gate |
 |---|---|---|---|
 | start | `apply` | Binds the run to the call that started it, if one did. The run branch `fab0/<run>/base`; the run pull request once it has work | — |
-| `plan` | `planner` agent | The task list, and whether this team provides a contract that other teams build against. Kept in the run store | **human**: the developer merges its review pull request in the runs repository |
+| `plan` | `planner` agent | The task list, and whether this team provides a contract that other teams build against. Kept in the run store | **human**: the developer approves its review pull request in the runs repository, with an approving review; fab0 merges it |
 | `contract`, when the team provides one | `implementer` agent | `contract.yaml`, in the caller's format | **auto**: the `reviewer` agent; then the caller acknowledges it, and a rejection brings a rework with the caller's findings |
 | `implement`, per task | `implementer` agent | The task's files, with tests, against any contract the caller bound (`upstream`). A task waits until that contract is accepted | **auto**: the `reviewer` agent; `apply` merges approved tasks into the run branch |
 | `report` | `reporter` agent | What this team delivered, deviations and open questions, about its own area only | the caller acknowledges it |
-| end | `apply` | Brings `main` into the run branch, and marks the run pull request ready | **human**: a person merges the run into `main` |
+| end | `apply` | Brings `main` into the run branch, and marks the run pull request ready | **human**: a person merges the run into `main`, or `apply` does with `pr.merge` when `git.auto_merge` allows the base |
 
 ## What a caller binds, and what it takes back
 
