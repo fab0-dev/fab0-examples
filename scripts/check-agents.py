@@ -1,5 +1,6 @@
-"""Exit check for the examples: headless Claude Code runs the `story` example end to end on a small codebase,
-through `/fab0:run`, against a fake tracker (FAB0_GH_FAKE) and local bare origins. Nothing reaches GitHub.
+"""Exit check for the examples: headless Claude Code runs the `story` example, or the `feature` composition, end to end
+on a small codebase, through `/fab0:run`, against a fake tracker (FAB0_GH_FAKE) and local bare origins. Nothing reaches
+GitHub.
 
 The workspace is set up as the example's README says: the home checkout `hotel` holds a copy of `story` (with `acme`
 for OWNER, `hotel` for REPO and `po-user` as the product owner), beside the runs repository `hotel-runs`, each
@@ -30,8 +31,8 @@ The check drives a 0.10 run, one session at a time, and acts between sessions on
 
 Anything else that stops the run fails the check, which starts no further session and names the unit and why: an
 escalation, a unit blocked on a failure or another signal for people (as the engine's inbox lists them), a person's
-decision the check doesn't make. So does a run that isn't done within eight
-sessions, with the run's position as `fab0-resolve status` gives it.
+decision the check doesn't make. So does a run that isn't done within eight rounds (a round is one session), with the
+run's position as `fab0-resolve status` gives it.
 
 The outcome is read from the fake tracker's file, git and `fab0-resolve status`, never from a session's report: the
 run is done; every Pipeline Run and Pipeline Step of the run carries the run id and is closed; each task of the task
@@ -46,22 +47,47 @@ so that the questions of a step that reads its pull request and of one that does
 them, and the unit is reworked (4); and a confirmation a session made is told from the check's own, by attempt, and
 the check's own is refused as "a session confirmed for the person" (3).
 
-With `--example feature`, it runs the `feature` composition instead: the parent in a product repository, and a copy
-of `delivery` in a service and a web repository beside it, each factory's run in its own session and checkout, as
-its people would run it. The script merges each review pull request as its owner would (the parent's requirements
-and wrap-up, each team's plan), and stops when the parent's run is done. Then each team was built against what the
-parent accepted, and the product repositories hold no ledger and no empty commit.
+With `--example feature`, it runs the `feature` composition the same way, as a 0.10 run of three factories: the
+parent in a product repository `product`, and a copy of `delivery` in a `service` and a `web` repository beside it,
+each set up as its README says (`acme` for OWNER, the repository's name for REPO, `product-runs` for PRODUCT-runs,
+`po-user` in every role), with the runs repository `product-runs` beside them and a bare `origin` for each of the four.
+The fake tracker holds the Feature `acme/product#1` and its Story `acme/product#2`. `validate` must pass in the three
+checkouts, and the parent's must check both connections, before any session starts.
+
+The first session runs `/fab0:run #2 --profile cheap` in `product`; the run id is its Pipeline Run's number, which
+every factory's run shares. Each factory's run is taken up only by a session in its own checkout, as its people would:
+after that, each factory (`product`, `service`, `web`) gets a session, `/fab0:run <run> --profile cheap`, in turn
+whenever it has work to do (its inbox ranks the run, or the run is done and its Pipeline Run still open), one session
+at a time, until the parent's run is done and closed or a factory has used its eight rounds (a round is one of its
+sessions: every run pull request takes one after the check's merge, so passes over the factories would run out first).
+Between sessions the check acts where the examples name a person, as for `story`: the product owner approves the
+requirements' and the wrap-up's pull requests (`/approve`); each team's developer confirms the team's plan at the
+prompt, in the team's checkout; each unit's questions are answered once, where the unit's step takes answers; and each
+run pull request that `apply` marked merged is merged on its origin, in `acme/product-runs` (the parent's, the
+service's and the web's) and in the teams' repositories. It decides nothing else, and a stop it doesn't cover fails the check as above, naming the factory.
+
+The outcome is read from the tracker and the repositories: the parent's Pipeline Run is a sub-issue of the Story and
+holds the service's and the web's, every Pipeline Run and Pipeline Step of the three factories carries the parent's run
+id and is closed, and `acme/service` and `acme/web` hold no issue; the parent's `acceptor` approved the service's
+hand-back, its contract included, and the web's; each team's plan read the requirements at the version the product
+owner approved, and every merged attempt of the web read the contract at the version the parent accepted (one that read
+another, or none, fails); the Story is closed, and the Feature is closed or has follow-up Stories; `acme/product` has no
+new commit, no run branch and no pull request; each team's repository differs from its starting commit only in files a
+task of its task list claims; and no commit of the four repositories is empty or holds a run's state.
 
 It costs tokens and needs a logged-in `claude`, `uv`, and the engine of a sibling fab0-core checkout (or $FAB0_CORE,
-the path of its `plugins/fab0`), at 0.10 or later.
+the path of its `plugins/fab0`), at 0.10 or later. Every session runs on `--profile cheap`, under `--max-budget-usd` and
+a timeout; every command it starts uses the fake tracker and the local origins, never GitHub.
 
-    uv run python scripts/check-agents.py [--example story|feature] [--model sonnet] [--budget 5] [--keep]
+    uv run python scripts/check-agents.py --example story [--model sonnet] [--budget 5] [--keep]
+    uv run python scripts/check-agents.py --example feature [--model sonnet] [--budget 5] [--keep]
 
 It prints each expectation as `ok` or `FAIL`, each session's cost and the total, and exits 0 when all passed or 1
 otherwise. It removes its workspace only when all passed and `--keep` isn't given; otherwise it prints where it kept it.
 """
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -69,6 +95,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 from datetime import UTC, datetime
 from fnmatch import fnmatchcase
@@ -177,7 +204,8 @@ SETTINGS = {
 RUNS = "acme/hotel-runs"
 PO = "po-user"  # the fake tracker has one user, who is every person the examples name
 MIN_ENGINE = (0, 10)  # a 0.10 run: its state on the run tracker, its merges `apply`'s
-ROUNDS = 8  # the most sessions a run may take
+ROUNDS = 8  # the most sessions a run may take; a composition's: the most rounds, each factory a session in turn
+SESSION_TIMEOUT = 5400  # seconds
 STORY_REF = "acme/hotel#1"
 # why a unit is blocked on something that needs a person's attention, as the engine's inbox lists them
 SIGNALS = ("tracker", "invalid-dependency", "failed", "cross-run", "condition", "unsupported", "factory")
@@ -268,9 +296,11 @@ class Check:
         self.gh = self.tmp / "gh.json"  # the check's own files stay outside the workspace
         self.cost = 0.0
         self.failures: list[str] = []
+        self.runs_repo = RUNS  # the run tracker's repository
+        self.validated: dict[str, dict] = {}  # what `validate` said in each checkout
         self.approved: set[tuple] = set()  # pull requests the check approved, at which head
-        self.answered: set[str] = set()  # units whose questions it answered
-        self.confirmed: set[tuple[str, int]] = set()  # (unit, attempt) it confirmed at the prompt
+        self.answered: set[tuple[str, str]] = set()  # (factory, unit) whose questions it answered
+        self.confirmed: set[tuple[str, str, int]] = set()  # (factory, unit, attempt) it confirmed at the prompt
 
     def origin(self, github: str) -> Path:
         """The local bare repository that stands for `github` (`acme/hotel`): `origin` of its checkout, and where
@@ -351,8 +381,10 @@ class Check:
             **github,
         }
 
-    def claude(self, prompt: str) -> bool:
-        """One session in the home checkout, a line of its result and its cost; False when it didn't end."""
+    def claude(self, prompt: str, cwd: Path | None = None) -> bool:
+        """One session in a checkout (the home one by default), a line of its result and its cost; False when it
+        didn't end."""
+        cwd = cwd or self.home
         args = [
             "claude",
             "-p",
@@ -370,15 +402,15 @@ class Check:
             "--dangerously-skip-permissions",
         ]
         args += ["--max-budget-usd", self.budget, "--output-format", "json"]
-        print(f"$ claude -p {prompt!r} (in {self.home})", flush=True)
+        print(f"$ claude -p {prompt!r} (in {cwd})", flush=True)
         try:
             run = subprocess.run(
                 args,
-                cwd=self.home,
+                cwd=cwd,
                 env=self.env(),
                 capture_output=True,
                 text=True,
-                timeout=5400,
+                timeout=SESSION_TIMEOUT,
             )
         except subprocess.TimeoutExpired:
             self.expect(False, f"the session `{prompt}` ended within its timeout")
@@ -417,6 +449,7 @@ class Check:
             if not (path / ".fab0").is_dir():
                 continue
             result = self.resolve("validate", cwd=path)
+            self.validated[path.name] = result
             if not result.get("ok"):
                 passed = False
                 errors = result.get("errors") or [result.get("error") or result]
@@ -531,11 +564,11 @@ class Check:
         print(f"  {PO} comments /approve on {github}#{pull['number']} ({unit['unit']})", flush=True)
         return None
 
-    def reads(self, unit: dict) -> set[str]:
-        """Where a unit's step takes answers, from its wiring: `pr` when it reads its own pull request (its reviews
-        and conversation comments), `item` when it reads the body of the run's item."""
+    def reads(self, unit: dict, home: Path | None = None) -> set[str]:
+        """Where a unit's step takes answers, from its wiring (that of the checkout `home`): `pr` when it reads its
+        own pull request (its reviews and conversation comments), `item` when it reads the body of the run's item."""
         found = set()
-        wiring = self.home / ".fab0"
+        wiring = (home or self.home) / ".fab0"
         step = yaml_load((wiring / "steps" / f"{unit['step']}.yaml").read_text())
         for name in step.get("inputs", []):
             file = wiring / "artifacts" / f"{name}.yaml"
@@ -549,63 +582,68 @@ class Check:
                 found.add("item")
         return found
 
-    def answer(self, unit: dict) -> str | None:
+    def answer(self, unit: dict, home: Path | None = None, item: str | None = STORY_REF) -> str | None:
         """The one reply to a unit's questions, where its step takes answers (`reads`): a comment on its pull request
-        when it reads that, else appended to the body of the run's Story, which it reads as `intent`. Why it can't,
-        if it can't."""
-        if unit["unit"] in self.answered:
+        when it reads that, else appended to the body of the run's Story (`item`), which it reads as `intent`; a run
+        with no item has no such place. Why it can't, if it can't."""
+        key = ((home or self.home).name, unit["unit"])
+        if key in self.answered:
             return "asks questions a second time: the check answers each unit once"
-        reads = self.reads(unit)
+        reads = self.reads(unit, home)
         found = self.pull_of(unit["branch"]) if "pr" in reads and unit.get("branch") else None
-        if found is None and "item" not in reads:
+        if found is None and ("item" not in reads or item is None):
             return "asks questions, and the check finds no pull request or item the step reads to answer them on"
-        self.answered.add(unit["unit"])
+        self.answered.add(key)
 
         def reply(data: dict) -> None:
             if found is None:
-                data["issues"][STORY_REF]["body"] += f"\n\n{ANSWER}"
+                data["issues"][item]["body"] += f"\n\n{ANSWER}"
                 return
             target = next(p for p in data["pulls"][found[0]] if p["number"] == found[1]["number"])
             comments = target.setdefault("comments", [])
             comments.append({"id": len(comments) + 1, "body": ANSWER, "user": PO, "at": self.clock(time.time())})
 
         self.change_gh(reply)
-        where = f"{found[0]}#{found[1]['number']}" if found else f"the Story {STORY_REF}"
+        where = f"{found[0]}#{found[1]['number']}" if found else f"the Story {item}"
         print(f"  {PO} answers the questions of {unit['unit']} on {where}", flush=True)
         return None
 
-    def confirm(self, run: str, unit: dict) -> str | None:
-        """The product owner confirms a unit at the prompt, in the home checkout: `confirm`, the command a person's
-        yes runs. Why it can't, if it can't."""
-        result = self.resolve("confirm", run, unit["unit"], "--profile", "cheap")
+    def confirm(self, run: str, unit: dict, home: Path | None = None) -> str | None:
+        """A person confirms a unit at the prompt, in a checkout (the home one by default): `confirm`, the command
+        a person's yes runs. Why it can't, if it can't."""
+        home = home or self.home
+        result = self.resolve("confirm", run, unit["unit"], "--profile", "cheap", cwd=home)
         if not result.get("ok"):
             error = str(result.get("error") or result)
             if "decided already" in error or "isn't waiting for a confirmation" in error:
                 return f"a session confirmed for the person ({error})"
             return f"can't be confirmed: {error}"
-        self.confirmed.add((unit["unit"], int(result["attempt"])))
+        self.confirmed.add((home.name, unit["unit"], int(result["attempt"])))
         print(f"  {PO} confirms {unit['unit']} at the prompt: {result.get('line', '')}", flush=True)
         return None
 
-    def confirmed_by_a_session(self, run: str) -> list[str]:
-        """Attempts whose confirmation at the prompt the run's Pipeline Steps hold, which the check didn't make: each
-        as `unit` and its attempt."""
+    def confirmed_by_a_session(self, run: str, home: Path | None = None) -> list[str]:
+        """Attempts whose confirmation at the prompt the Pipeline Steps of the run (of the factory of the checkout
+        `home`, when given) hold, which the check didn't make: each as `unit` and its attempt."""
         found = []
-        for name, fact in self.step_facts(run).items():
+        factory = (home or self.home).name
+        for name, fact in self.step_facts(run, factory if home else None).items():
             if name.endswith("-gate") and fact.get("gate", {}).get("via") == "prompt":
                 unit, attempt = name.removesuffix("-gate").rsplit("-", 1)
-                if (unit, int(attempt)) not in self.confirmed:
+                if (factory, unit, int(attempt)) not in self.confirmed:
                     found.append(f"{unit}, attempt {attempt}")
         return sorted(found)
 
-    def merge_runs(self, run_branch: str) -> list[str]:
+    def merge_runs(self, run_branches: str | set[str]) -> list[str]:
         """What GitHub does and the fake doesn't: a run pull request that `apply` marked merged reaches the base of
-        its repository's `origin`. Only those, and only the run branch."""
+        its repository's `origin`. Only those, and only the run branches (one per factory)."""
+        branches = {run_branches} if isinstance(run_branches, str) else run_branches
         merged = []
         for github, pulls in json.loads(self.gh.read_text()).get("pulls", {}).items():
             for pull in pulls:
                 bare, base = self.origin(github), pull.get("base", "main")
-                if pull["branch"] != run_branch or pull.get("state") != "merged":
+                run_branch = pull["branch"]
+                if run_branch not in branches or base != "main" or pull.get("state") != "merged":
                     continue
                 if not git(bare, "branch", "--list", run_branch):
                     continue
@@ -637,52 +675,90 @@ class Check:
                 return "confirm"
             if "questions" in reason:
                 return "answer"
-            if reason.get("gate") in ("merge", "gate", "running", "ack") or "done" in reason:
+            if reason.get("gate") in ("merge", "approved", "gate", "running", "ack", "accept"):
                 return "go"
+            if "done" in reason or "child" in reason or "reject" in reason:
+                return "go"  # `apply`, an agent or the connected factory's people go on with it
             return "stuck"  # an escalation, a decision by issue or label, anything else a person decides
         if state == "blocked" and set(reason) & set(SIGNALS):
             return "stuck"
         return "go"
 
-    def between(self, run: str, status: dict) -> bool:
-        """The product owner's acts between two sessions, from what the run waits on; False, with each unit named,
-        when it stopped on what no named person decides, and nothing is done then."""
-        units = status.get("units", [])
-        stuck = [u for u in units if self.classify(u) == "stuck"]
+    def stuck(self, status: dict, label: str = "") -> bool:
+        """Whether a unit stopped on what no named person decides: each is named, with its reason."""
+        stuck = [u for u in status.get("units", []) if self.classify(u) == "stuck"]
         for u in stuck:
             reason = f"{u['state']} {u.get('reason')}"
-            self.expect(False, f"{u['unit']} stops the run, and no named person decides it: {reason}")
-        if stuck:
-            return False
+            self.expect(False, f"{label}{u['unit']} stops the run, and no named person decides it: {reason}")
+        return bool(stuck)
+
+    def act(
+        self, run: str, status: dict, home: Path | None = None, item: str | None = STORY_REF, label: str = ""
+    ) -> bool:
+        """The acts of the people the examples name, from what one factory's run waits on (its checkout `home`, the
+        run's Story `item`): approve, confirm, answer. False, with each unit named, when one is refused."""
         refused = []
-        for u in units:
+        for u in status.get("units", []):
             act = self.classify(u)
             why = None
             if act == "approve":
                 why = self.approve(u)
             elif act == "answer":
-                why = self.answer(u)
+                why = self.answer(u, home, item)
             elif act == "confirm":
-                why = self.confirm(run, u)
+                why = self.confirm(run, u, home)
             if why:
                 refused.append(u)
-                self.expect(False, f"{u['unit']}: {why}")
+                self.expect(False, f"{label}{u['unit']}: {why}")
         return not refused
+
+    def between(self, run: str, status: dict) -> bool:
+        """The product owner's acts between two sessions, from what the run waits on; False, with each unit named,
+        when it stopped on what no named person decides, and nothing is done then."""
+        return not self.stuck(status) and self.act(run, status)
 
     # ------------------------------------------------------------ what the run left
 
-    def step_facts(self, run: str) -> dict[str, dict]:
-        """The facts on the run's Pipeline Steps (the comments `fab0-resolve` writes), by name."""
+    def facts_of(self, issue: dict) -> dict[str, dict]:
+        """The facts in the comments of an issue (`fab0-resolve` writes them), by name, the first of each."""
         found: dict[str, dict] = {}
+        for comment in issue.get("comments", []):
+            for m in FACT.finditer(comment.get("body") or ""):
+                found.setdefault(m["name"], yaml_load(m["body"]))
+        return found
+
+    def step_facts(self, run: str, factory: str | None = None) -> dict[str, dict]:
+        """The facts on the run's Pipeline Steps, by name: those of every factory's, or of the Pipeline Steps under
+        the Pipeline Run of one `factory`."""
+        mine = self.steps_of(run, factory) if factory is not None else None
+        found = {}
         for ref, issue in self.issues().items():
-            if not ref.startswith(f"{RUNS}#") or issue.get("type") != "Pipeline Step":
+            if not ref.startswith(f"{self.runs_repo}#") or issue.get("type") != "Pipeline Step":
                 continue
             if issue.get("issue_fields", {}).get("Run ID") != run or issue.get("state_reason") == "not_planned":
                 continue
-            for comment in issue.get("comments", []):
-                for m in FACT.finditer(comment.get("body") or ""):
-                    found.setdefault(m["name"], yaml_load(m["body"]))
+            if mine is not None and ref not in mine:
+                continue
+            for name, fact in self.facts_of(issue).items():
+                found.setdefault(name, fact)
         return found
+
+    def runs_of(self, run: str) -> dict[str, str]:
+        """The Pipeline Runs of the run on the run tracker, by the factory they belong to."""
+        return {
+            issue["issue_fields"].get("Factory"): ref
+            for ref, issue in self.issues().items()
+            if ref.startswith(f"{self.runs_repo}#")
+            and issue.get("type") == "Pipeline Run"
+            and issue.get("issue_fields", {}).get("Run ID") == run
+            and issue.get("state_reason") != "not_planned"
+        }
+
+    def steps_of(self, run: str, factory: str) -> set[str]:
+        """The Pipeline Steps that a factory's Pipeline Run of the run holds."""
+        issues = self.issues()
+        pipeline = issues.get(self.runs_of(run).get(factory, ""), {})
+        return {r for r in pipeline.get("sub_issues", []) if issues.get(r, {}).get("type") == "Pipeline Step"}
 
     def tasks_of(self, run: str) -> list[dict] | None:
         """The run's task list, from `main` of the runs repository."""
@@ -691,13 +767,12 @@ class Check:
         )
         return yaml_load(shown.stdout) if shown.returncode == 0 else None
 
-    def judge_issues(self, run: str, tasks: list[dict] | None) -> None:
-        """S7 and S9, on the tracker: the Task sub-issues, and the run's issues, all closed with the run's id."""
-        issues = self.issues()
+    def judge_run_issues(self, run: str) -> None:
+        """Every Pipeline Run and Pipeline Step of the run carries the run id, and no other, and is closed."""
         mine = {
             ref: issue
-            for ref, issue in issues.items()
-            if ref.startswith(f"{RUNS}#") and issue.get("type") in ("Pipeline Run", "Pipeline Step")
+            for ref, issue in self.issues().items()
+            if ref.startswith(f"{self.runs_repo}#") and issue.get("type") in ("Pipeline Run", "Pipeline Step")
         }
         ids = {ref: issue.get("issue_fields", {}).get("Run ID") for ref, issue in mine.items()}
         wrong = {ref: found for ref, found in ids.items() if found != run}
@@ -707,6 +782,11 @@ class Check:
         )
         opened = sorted(r for r, i in mine.items() if i.get("state", "open") != "closed")
         self.expect(not opened, f"every Pipeline Run and Pipeline Step is closed (open: {opened})")
+
+    def judge_issues(self, run: str, tasks: list[dict] | None) -> None:
+        """S7 and S9, on the tracker: the Task sub-issues, and the run's issues, all closed with the run's id."""
+        issues = self.issues()
+        self.judge_run_issues(run)
         children = [
             r for r in issues.get(STORY_REF, {}).get("sub_issues", []) if issues.get(r, {}).get("type") == "Task"
         ]
@@ -1087,246 +1167,394 @@ CODEBASES = {
     "web": "# web\n\nThe shop's web checkout: plain HTML and JavaScript, no build step.\n",
 }
 PRODUCT_RUNS = "acme/product-runs"
+FEATURE_REF = "acme/product#1"
+PRODUCT_STORY = "acme/product#2"
+FACTORIES = ("product", "service", "web")  # the parent, then the two teams it calls: the order of their turns
+TEAMS = FACTORIES[1:]
+# the name of an attempt's fact: not a gate's or a claim's
+ATTEMPT = re.compile(r"(?P<unit>.+)-(?P<attempt>[1-9][0-9]*)")
+
+
+def sha(data: bytes) -> str:
+    return "sha256:" + hashlib.sha256(data).hexdigest()
 
 
 class Composition(Check):
-    """The `feature` example, with two `delivery` factories beside it."""
+    """The `feature` example, with a `delivery` factory for the service and one for the web beside it: each factory
+    runs in its own session and checkout, in turn, and the people the examples name act between sessions."""
 
     def __init__(self, keep: bool, model: str, budget: str):
         super().__init__(keep, model, budget)
-        self.workspace = self.tmp / "workspace"
         self.home = self.workspace / "product"
-        self.cost = 0.0
+        self.runs_repo = PRODUCT_RUNS
+        self.starts: dict[str, str] = {}  # the starting commit of each repository
+        self.branches: dict[str, str] = {}  # each factory's run branch
+        self.sessions = {name: 0 for name in FACTORIES}  # the sessions each factory has had
+
+    def checkout(self, name: str) -> Path:
+        return self.workspace / name
+
+    @staticmethod
+    def repositories() -> dict[str, str]:
+        """The four repositories, as their checkout's name and their GitHub name."""
+        return {**{name: f"acme/{name}" for name in FACTORIES}, "product-runs": PRODUCT_RUNS}
 
     def setup(self) -> None:
-        examples.assemble(ROOT / "feature", self.home)
-        examples.connect(
-            ROOT / "feature", self.home
-        )  # service and web, beside it, committed
+        """What the `feature` and `delivery` READMEs say to do, in a workspace of the check's own: the parent in
+        `product`, a copy of `delivery` in `service` and `web` beside it, OWNER, REPO and PRODUCT-runs replaced
+        everywhere in each `.fab0/`, the product owner and both developers named; the runs repository
+        `product-runs` beside them; a bare origin for each of the four; the Feature and its Story on the fake
+        tracker."""
         (self.tmp / "settings.json").write_text(json.dumps(SETTINGS))
-        for name in ("product", "service", "web"):
-            path = self.workspace / name
-            (
-                path / ".claude" / "settings.json"
-            ).unlink()  # the plugin comes from --plugin-dir instead
-            wiring = path / ".fab0" / "fab0.yaml"
-            text = (
-                wiring.read_text()
-                .replace("OWNER/REPO-runs", PRODUCT_RUNS)
-                .replace("OWNER/REPO", "acme/product")
-            )
-            wiring.write_text(
-                text.replace("OWNER/", "acme/")
-                .replace("owner: OWNER", "owner: acme")
-                .replace("[USER]", "[po-user]")
-            )
+        sources = {"product": ROOT / "feature", **{n: ROOT / e for n, e in examples.CONNECTED["feature"].items()}}
+        for name, source in sources.items():
+            path = self.checkout(name)
+            examples.assemble(source, path)
+            # the plugin comes from --plugin-dir, and the marketplace of the example's settings would reach GitHub
+            (path / ".claude" / "settings.json").unlink()
+            for file in (path / ".fab0").rglob("*"):
+                if file.is_file():
+                    file.write_text(
+                        file.read_text()
+                        .replace("OWNER", "acme")
+                        .replace("PRODUCT-runs", "product-runs")
+                        .replace("REPO", name)
+                        .replace("[USER]", f"[{PO}]")
+                    )
             if name in CODEBASES:
                 (path / "README.md").write_text(CODEBASES[name])
-                (path / ".gitignore").write_text("__pycache__/\n")
-            git(path, "config", "user.email", "check@example.com")
-            git(path, "config", "user.name", "check")
-            git(path, "add", "-A")
-            git(path, "commit", "-q", "-m", "start")
-            bare = self.tmp / "remotes" / f"{name}.git"
-            git(self.tmp, "init", "-q", "--bare", "-b", "main", str(bare))
-            git(path, "remote", "add", "origin", str(bare))
-            git(path, "push", "-q", "origin", "main")
-        self.runs = self.tmp / "github" / f"{PRODUCT_RUNS}.git"
-        git(self.tmp, "init", "-q", "--bare", "-b", "main", str(self.runs))
+                (path / ".gitignore").write_text("__pycache__/\n")  # what running tests leaves is no one's change
+            self.publish(path, f"acme/{name}")
+            self.starts[name] = git(path, "rev-parse", "HEAD")
+        runs = self.checkout("product-runs")
+        runs.mkdir()
+        git(runs, "init", "-q", "-b", "main")
+        (runs / "README.md").write_text("# product-runs\n\nThe runs of the product's factories.\n")
+        self.publish(runs, PRODUCT_RUNS)
+        self.starts["product-runs"] = git(runs, "rev-parse", "HEAD")
+        self.runs = self.origin(PRODUCT_RUNS)
         issues = {
-            "acme/product#1": {
-                "title": "Card payments",
-                "body": FEATURE,
-                "type": "Feature",
-                "sub_issues": ["acme/product#2"],
-            },
-            "acme/product#2": {"title": "Pay by card", "body": STORY, "type": "Story"},
+            FEATURE_REF: {"title": "Card payments", "body": FEATURE, "type": "Feature", "sub_issues": [PRODUCT_STORY]},
+            PRODUCT_STORY: {"title": "Pay by card", "body": STORY, "type": "Story"},
         }
-        self.gh.write_text(json.dumps({"user": "po-user", "issues": issues}, indent=2))
+        self.gh.write_text(json.dumps({"user": PO, "issues": issues}, indent=2))
 
-    def claude_in(self, factory: str, run: str) -> None:
-        """One session in one factory's checkout, streamed: a line per tool call as it happens, then its result."""
-        args = [
-            "claude",
-            "-p",
-            f"/fab0:run {run} --profile cheap",
-            "--plugin-dir",
-            str(CORE),
-        ]
-        args += [
-            "--settings",
-            str(self.tmp / "settings.json"),
-            "--setting-sources",
-            "project,local",
-        ]
-        args += [
-            "--model",
-            self.model,
-            "--dangerously-skip-permissions",
-            "--max-budget-usd",
-            self.budget,
-        ]
-        args += ["--output-format", "stream-json", "--verbose"]
-        print(f"\n=== {factory}: /fab0:run {run}", flush=True)
+    def validate(self) -> bool:
+        """`validate` in the three factories' checkouts, and the parent's own look at both connections."""
+        passed = super().validate()
+        if not passed:
+            return False
+        found = self.validated.get("product", {}).get("factories", {})
+        for team in TEAMS:
+            checked = bool(found.get(team, {}).get("checked"))
+            why = found.get(team, {}).get("why")
+            self.expect(checked, f"the parent's validate checks its connection to {team} ({why})")
+            passed = passed and checked
+        return passed
+
+    # ------------------------------------------------------------ the sessions
+
+    def claude(self, prompt: str, cwd: Path | None = None) -> bool:
+        """One session in a factory's checkout, streamed: a line per agent it calls as it happens, then its result
+        and its cost; False when it didn't end. A timeout stops it."""
+        cwd = cwd or self.home
+        args = ["claude", "-p", prompt, "--plugin-dir", str(CORE), "--settings", str(self.tmp / "settings.json")]
+        args += ["--setting-sources", "project,local", "--model", self.model, "--dangerously-skip-permissions"]
+        args += ["--max-budget-usd", self.budget, "--output-format", "stream-json", "--verbose"]
+        print(f"\n=== claude -p {prompt!r} (in {cwd})", flush=True)
         proc = subprocess.Popen(
-            args,
-            cwd=self.workspace / factory,
-            env=self.env(),
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
+            args, cwd=cwd, env=self.env(), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
         )
-        for line in proc.stdout:
-            try:
-                event = json.loads(line)
-            except ValueError:
-                continue
-            if event.get("type") == "assistant":
-                for part in event.get("message", {}).get("content", []):
-                    if part.get("type") == "tool_use" and part["name"] == "Agent":
-                        given = part.get("input", {})
-                        print(
-                            f"  - agent {given.get('subagent_type')}: {given.get('description', '')}",
-                            flush=True,
-                        )
-            elif event.get("type") == "result":
-                self.cost += event.get("total_cost_usd") or 0.0
-                print(f"  = {(event.get('result') or '').strip()[:800]}", flush=True)
-                print(
-                    f"  (cost ${event.get('total_cost_usd') or 0:.2f}, {event.get('num_turns', '?')} turns)",
-                    flush=True,
-                )
-        proc.wait(timeout=5400)
+        timer = threading.Timer(SESSION_TIMEOUT, proc.kill)
+        timer.start()
+        result = None
+        try:
+            for line in proc.stdout:
+                try:
+                    event = json.loads(line)
+                except ValueError:
+                    continue
+                if event.get("type") == "assistant":
+                    for part in event.get("message", {}).get("content", []):
+                        if part.get("type") == "tool_use" and part["name"] == "Agent":
+                            given = part.get("input", {})
+                            print(f"  - agent {given.get('subagent_type')}: {given.get('description', '')}", flush=True)
+                elif event.get("type") == "result":
+                    result = event
+        finally:
+            timer.cancel()
+            proc.wait()
+        if result is None:
+            self.expect(False, f"the session `{prompt}` ended with a result, within its timeout")
+            return False
+        cost = result.get("total_cost_usd") or 0.0
+        self.cost += cost
+        print(f"  = {(result.get('result') or '').strip()[:800]}", flush=True)
+        print(f"  (cost ${cost:.2f}, {result.get('num_turns', '?')} turns)", flush=True)
+        self.expect(not result.get("is_error"), f"the session `{prompt}` ended without an error")
+        return not result.get("is_error")
 
-    def resolve_in(self, factory: str, *args: str) -> dict:
-        found = subprocess.run(
-            [str(CORE / "bin" / "fab0-resolve"), *args, "--profile", "cheap"],
-            cwd=self.workspace / factory,
-            env=self.env(),
-            capture_output=True,
-            text=True,
-        )
-        return json.loads(found.stdout)
+    def status_in(self, factory: str, run: str) -> dict:
+        return self.resolve("status", run, "--profile", "cheap", cwd=self.checkout(factory))
 
     def has_work(self, factory: str, run: str) -> bool:
-        result = self.resolve_in(factory, "status", run)
-        if not result.get("ok") or result.get("kind") == "done":
+        """Whether a session in a factory's checkout would do something in the run: the engine's inbox ranks the run
+        there, or the run is done and its Pipeline Run still open, which a session's `apply` closes."""
+        runs = self.runs_of(run)
+        if factory not in runs:
+            return False  # no call has started its run yet
+        found = self.resolve("inbox", "--profile", "cheap", cwd=self.checkout(factory))
+        if any(r.get("run") == run and r.get("rank") for r in found.get("runs", [])):
+            return True
+        open_run = self.issues()[runs[factory]].get("state", "open") != "closed"
+        return open_run and self.status_in(factory, run).get("kind") == "done"
+
+    def finished(self, run: str) -> bool:
+        """The parent's run is done, and every Pipeline Run of the run is closed, the teams' too."""
+        if self.status_in("product", run).get("kind") != "done":
             return False
-        return any(
-            u["state"] in ("ready", "running")
-            or (u.get("reason") or {}).get("gate")
-            in ("gate", "running", "ack", "merge")
-            for u in result["units"]
-        )
+        issues = self.issues()
+        return all(issues[ref].get("state", "open") == "closed" for ref in self.runs_of(run).values())
 
-    def merge_reviews(self) -> list[str]:
-        """What each owner does: merge every open review pull request of the runs repository."""
-        data = json.loads(self.gh.read_text())
-        merged = []
-        for pull in data.get("pulls", {}).get(PRODUCT_RUNS, []):
-            if pull.get("state", "open") != "open":
-                continue
-            tree = self.tmp / "merge"
-            git(self.tmp, "clone", "-q", str(self.runs), str(tree))
-            git(
-                tree,
-                "-c",
-                "user.name=po-user",
-                "-c",
-                "user.email=po@example.com",
-                "merge",
-                "-q",
-                "--no-ff",
-                "-m",
-                "Merge",
-                f"origin/{pull['branch']}",
-            )
-            git(tree, "push", "-q", "origin", "main")
-            shutil.rmtree(tree)
-            pull.update(state="merged", merged_by="po-user")
-            merged.append(pull["branch"])
-        self.gh.write_text(json.dumps(data, indent=2))
-        return merged
+    def between_all(self, run: str) -> bool:
+        """What the people do between two sessions, in each factory that has a run, in its checkout: the product
+        owner approves the requirements and the wrap-up, each team's developer confirms its plan, the questions of
+        every unit are answered; and the run pull requests that `apply` marked merged are merged on their origins.
+        False, with each unit named, when a unit stopped on what no named person decides: then nothing is done."""
+        statuses = {name: self.status_in(name, run) for name in FACTORIES if name in self.runs_of(run)}
+        for name, status in statuses.items():
+            if "units" not in status:
+                self.expect(False, f"{name}: status fails ({status.get('error') or status})")
+        if any("units" not in status for status in statuses.values()):
+            return False
+        if any([self.stuck(status, f"{name}: ") for name, status in statuses.items()]):  # all of them, each named
+            return False
+        self.branches = {name: status["branch"] for name, status in statuses.items() if status.get("branch")}
+        acts = [
+            self.act(run, status, self.checkout(name), PRODUCT_STORY if name == "product" else None, f"{name}: ")
+            for name, status in statuses.items()
+        ]
+        self.merge_runs(set(self.branches.values()))
+        return all(acts)
 
-    def facts(self, project: str, run: str) -> dict:
-        found = {}
-        listing = git(
-            self.runs,
-            "ls-tree",
-            "-r",
-            "--name-only",
-            "main",
-            "--",
-            f"runs/{project}/{run}/ledger",
-        )
-        for path in listing.split():
-            found[Path(path).stem] = git(self.runs, "show", f"main:{path}")
-        return found
+    def steps(self, run: str) -> dict[str, int]:
+        """How many facts each team's Pipeline Steps hold: what a session in a team's checkout writes."""
+        return {team: len(self.step_facts(run, team)) for team in TEAMS}
+
+    def snapshot(self, run: str) -> str:
+        """What a session can change: each factory's units, the fake tracker, and the branches of the origins."""
+        units = {name: self.status_in(name, run).get("units") for name in FACTORIES if name in self.runs_of(run)}
+        refs = [git(self.origin(github), "for-each-ref") for github in self.repositories().values()]
+        return json.dumps([units, self.gh.read_text(), refs])
+
+    def turn(self, run: str, factory: str) -> str:
+        """One factory's turn: the people's acts, then a session in its checkout when it has work. `ran` when a
+        session ran; `idle` when it had no work; `bound` when it has work and its sessions are used up; `failed`."""
+        if not self.between_all(run):
+            return "failed"
+        if not self.has_work(factory, run):
+            return "idle"
+        if self.sessions[factory] >= ROUNDS:
+            return "bound"
+        before, steps = self.snapshot(run), self.steps(run)
+        self.sessions[factory] += 1
+        if not self.claude(f"/fab0:run {run} --profile cheap", self.checkout(factory)):
+            return "failed"
+        for team in FACTORIES:
+            for unit in self.confirmed_by_a_session(run, self.checkout(team)):
+                self.expect(False, f"a session confirmed for the person ({team}: {unit})")
+        if factory == "product":
+            self.expect(self.steps(run) == steps, "the session in product took up no team's run: each team's do")
+        if self.snapshot(run) == before:  # nothing changed, and the check changed nothing: the next one won't
+            self.expect(False, f"the session in {factory} changed nothing, and the run isn't done")
+        return "failed" if self.failures else "ran"
+
+    def position(self, run: str) -> str:
+        status = self.status_in("product", run)
+        return str(status.get("position") or status.get("error") or status)
 
     def run(self) -> int:
         self.setup()
-        children = {"service": "1", "web": "1"}
-        for _ in range(8):
-            if self.resolve_in("product", "status", "2").get("kind") == "done":
+        if not self.validate():
+            return self.finish()
+        if not self.claude(f"/fab0:run #{PRODUCT_STORY.split('#')[1]} --profile cheap", self.home):
+            return self.finish()
+        self.sessions["product"] = 1
+        run = self.run_of(PRODUCT_STORY, PRODUCT_RUNS)
+        if run is None:
+            return self.finish()
+        return self.drive(run)
+
+    def drive(self, run: str) -> int:
+        """Each factory a session in turn whenever it has work, one session at a time, with the people's acts between
+        them, until the parent's run is done, something stops it, or a factory's rounds (its sessions) are used up:
+        every run pull request takes a session after the check's merge, so the factories' turns, not the passes over
+        them, are what is bounded."""
+        while not self.finished(run):
+            outcomes = []
+            for name in FACTORIES:
+                if self.finished(run):
+                    break
+                outcomes.append(self.turn(run, name))
+                if outcomes[-1] == "failed":
+                    return self.finish()
+                if outcomes[-1] == "bound":
+                    break
+            if "bound" in outcomes:
                 break
-            merged = self.merge_reviews()
-            if merged:
-                print(f"merged as their owners: {', '.join(merged)}", flush=True)
-            for factory, run in (("product", "2"), *children.items()):
-                if self.has_work(factory, run):
-                    self.claude_in(factory, run)
-        issues = json.loads(self.gh.read_text())["issues"]
-        status = self.resolve_in("product", "status", "2")
+            if "ran" not in outcomes and not self.finished(run):
+                self.expect(False, f"no factory has work to do, and the run isn't done ({self.position(run)})")
+                return self.finish()
+        done = self.finished(run)
+        self.expect(done, f"the run is done within {ROUNDS} rounds of each factory ({self.position(run)})")
+        if done:
+            self.judge(run)
+        else:
+            self.between_all(run)  # what stopped the run, if something did
+        return self.finish()
+
+    # ------------------------------------------------------------ what the run left
+
+    def runs_file(self, path: str) -> bytes | None:
+        """A file of `main` of the runs repository."""
+        shown = subprocess.run(["git", "-C", str(self.runs), "show", f"main:{path}"], capture_output=True)
+        return shown.stdout if shown.returncode == 0 else None
+
+    def judge_tree(self, run: str) -> None:
+        """S16: one tree and one id, closed; no issue in the teams' repositories."""
+        issues, runs = self.issues(), self.runs_of(run)
+        parent = runs.get("product")
         self.expect(
-            status.get("kind") == "done",
-            f"the Story's run is done ({status.get('kind')})",
+            parent in issues.get(PRODUCT_STORY, {}).get("sub_issues", []),
+            f"the parent's Pipeline Run {parent} is a sub-issue of the Story {PRODUCT_STORY}",
         )
+        held = issues.get(parent, {}).get("sub_issues", [])
+        for team in TEAMS:
+            self.expect(
+                runs.get(team) in held, f"the Pipeline Run of {team} ({runs.get(team)}) is a sub-issue of the parent's"
+            )
+        self.judge_run_issues(run)
+        stray = sorted(ref for ref in issues if ref.startswith(("acme/service#", "acme/web#")))
+        self.expect(not stray, f"acme/service and acme/web hold no issue ({stray})")
+
+    def judge_acceptance(self, run: str) -> None:
+        """S17: the parent's acceptor approved what each team handed back, the service's contract included."""
+        facts = self.step_facts(run, "product")
+        for team in TEAMS:
+            gates = sorted(
+                int(m[1]) for n in facts if (m := re.fullmatch(rf"{re.escape(team)}-([1-9][0-9]*)-gate", n))
+            )
+            gate = facts.get(f"{team}-{gates[-1]}-gate", {}).get("gate", {}) if gates else {}
+            self.expect(
+                gate.get("agent") == "acceptor" and gate.get("decision") == "approve",
+                f"the parent's acceptor approved the hand-back of {team} ({gate})",
+            )
+        service = self.runs_of(run).get("service")
+        call = self.facts_of(self.issues().get(service, {})).get("call", {})
+        taken = {o for o, f in call.get("formats", {}).items() if not f.get("optional")}
+        made = any("contract" in f.get("outputs", {}) for f in self.step_facts(run, "service").values())
         self.expect(
-            issues["acme/product#1"]["sub_issues"][:1] == ["acme/product#2"],
-            "the Story is under its Feature",
+            {"contract", "feedback"} <= taken and made,
+            f"what the acceptor approved of the service includes its contract (takes {sorted(taken)}, made: {made})",
         )
+
+    def judge_versions(self, run: str) -> None:
+        """S18: each team's plan read the requirements at the version the product owner approved, and each merged
+        attempt of the web read the contract at the version the parent accepted."""
+        main = self.runs_file(f"runs/product/{run}/spec.md")
+        approved = set()
+        for github, _, head in self.approved:
+            shown = subprocess.run(
+                ["git", "-C", str(self.origin(github)), "show", f"{head}:runs/product/{run}/spec.md"],
+                capture_output=True,
+            )
+            if github == PRODUCT_RUNS and shown.returncode == 0:
+                approved.add(sha(shown.stdout))
+        want = sha(main) if main is not None else None
         self.expect(
-            {"acme/service#1", "acme/web#1"}
-            <= set(issues["acme/product#2"].get("sub_issues", [])),
-            "each team's run is a sub-issue of the Story",
+            want is not None and approved == {want},
+            f"the requirements on main of {PRODUCT_RUNS} are the version the product owner approved "
+            f"({want}, {sorted(approved)})",
         )
-        feature = issues["acme/product#1"]
-        follow_ups = [r for r in feature.get("sub_issues", []) if r != "acme/product#2"]
+        for team in TEAMS:
+            plans = {
+                n: f.get("inputs", {}).get("spec")
+                for n, f in self.step_facts(run, team).items()
+                if (m := ATTEMPT.fullmatch(n)) and m["unit"] == "plan"
+            }
+            self.expect(
+                bool(plans) and all(read == want for read in plans.values()),
+                f"the plan of {team} read the requirements at the approved version ({plans})",
+            )
+        contract = self.runs_file(f"runs/service/{run}/contract.yaml")
+        accepted = sha(contract) if contract is not None else None
+        facts = self.step_facts(run, "web")
+        merged = {}
+        for name, fact in facts.items():
+            m = ATTEMPT.fullmatch(name)
+            if not m or fact.get("step") != "implement":
+                continue
+            unit = m["unit"]
+            tries = [int(k.rsplit("-", 1)[1]) for k in facts if (m2 := ATTEMPT.fullmatch(k)) and m2["unit"] == unit]
+            approvals = [
+                n for n in tries if facts.get(f"{unit}-{n}-gate", {}).get("gate", {}).get("decision") == "approve"
+            ]
+            if approvals:
+                merged[unit] = facts[f"{unit}-{max(approvals)}"].get("inputs", {}).get("upstream")
+        self.expect(
+            accepted is not None and bool(merged) and all(read == accepted for read in merged.values()),
+            "every merged attempt of the web read the contract at the version the parent accepted "
+            f"({merged}, accepted {accepted})",
+        )
+
+    def judge_items(self) -> None:
+        """S19: the wrap-up closed the Story, and the Feature is closed or has follow-up Stories."""
+        issues = self.issues()
+        self.expect(issues.get(PRODUCT_STORY, {}).get("state") == "closed", f"the Story {PRODUCT_STORY} is closed")
+        feature = issues.get(FEATURE_REF, {})
+        follow_ups = [r for r in feature.get("sub_issues", []) if r != PRODUCT_STORY]
         self.expect(
             feature.get("state") == "closed" or bool(follow_ups),
             f"the Feature is closed or has follow-up Stories ({feature.get('state', 'open')}, {follow_ups})",
         )
-        product = self.facts("product", "2")
-        accepted = [
-            n
-            for n, f in product.items()
-            if n.startswith("ack@") and "decision: accepted" in f
-        ]
-        self.expect(
-            any("+contract" in n for n in accepted),
-            f"the parent accepted the service's contract ({sorted(accepted)})",
-        )
-        self.expect(
-            sum("+feedback" in n for n in accepted) >= 2,
-            "the parent accepted both teams' reports",
-        )
-        web = self.facts("web", "1")
-        built = [
-            f
-            for n, f in web.items()
-            if n.startswith("implement-") and n[-1].isdigit() and "contract" not in n
-        ]
-        self.expect(
-            bool(built) and all("upstream:" in f for f in built),
-            "the web client was built against the contract",
-        )
-        for name in ("product", "service", "web"):
-            self.home_, self.home = self.home, self.workspace / name
-            files = git(self.home, "log", "--all", "--name-only", "--format=")
-            self.expect("ledger" not in files, f"no ledger file in {name}")
-            self.expect(self.empty_commits() == [], f"no empty commit in {name}")
-            self.home = self.home_
-        return self.finish()
+
+    def judge_repositories(self, run: str) -> None:
+        """S20: the product repository is untouched; the teams' repositories hold only their tasks' changes; no commit
+        is empty and no run's state is a file, in any of the four."""
+        product = self.origin("acme/product")
+        new = git(product, "rev-list", "--all", "--not", self.starts["product"]).split()
+        self.expect(not new, f"acme/product has no new commit ({new})")
+        branches = git(product, "branch", "--format=%(refname:short)").split()
+        self.expect(branches == ["main"], f"acme/product has no run branch ({branches})")
+        pulls = self.pulls("acme/product")
+        self.expect(pulls == [], f"acme/product has no pull request ({pulls})")
+        for team in TEAMS:
+            bare = self.origin(f"acme/{team}")
+            listed = self.runs_file(f"runs/{team}/{run}/tasks.yaml")
+            tasks = yaml_load(listed.decode()) if listed else None
+            changed = git(bare, "diff", "--name-only", "--no-renames", self.starts[team], "main").splitlines()
+            claims = [g for t in tasks or [] if t.get("repo", "home") == "home" for g in t.get("files", [])]
+            loose = [f for f in changed if not any(covers(g, f) for g in claims)]
+            self.expect(
+                tasks is not None and bool(changed) and not loose,
+                f"every file that changed on main of acme/{team} is claimed by a task of its list ({loose or changed})",
+            )
+        for name, github in self.repositories().items():
+            bare = self.origin(github)
+            for where, path in (("its origin", bare), ("its checkout", self.checkout(name))):
+                empty = self.empty_commits(path)
+                self.expect(empty == [], f"no commit of {github} is empty, in {where} ({empty})")
+            files = set(git(bare, "log", "--all", "--not", self.starts[name], "--name-only", "--format=").split())
+            state = [f for f in files if ("ledger" in f.split("/") if name == "product-runs" else run_state(f))]
+            self.expect(not state, f"no file of a run's state is in {github} ({sorted(state)})")
+
+    def judge(self, run: str) -> None:
+        """What the finished run left, from the tracker and the repositories."""
+        self.judge_tree(run)
+        self.judge_acceptance(run)
+        self.judge_versions(run)
+        self.judge_items()
+        self.judge_repositories(run)
 
 
 def main() -> int:
