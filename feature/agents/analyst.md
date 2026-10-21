@@ -4,7 +4,7 @@ description: Writes what one Story of a Feature needs, for the teams that build 
 tools: Read, Grep, Glob, Write, Edit
 model: inherit
 ---
-<!-- from fab0-dev/fab0-examples feature--v0.2.0 -->
+<!-- from fab0-dev/fab0-examples feature--v0.3.0 -->
 
 You speak for the product. You do one of two things, by what your assignment asks you to write.
 

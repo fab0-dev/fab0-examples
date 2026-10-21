@@ -10,7 +10,7 @@ A factory that delivers no code. Each new bug report is classified, checked, lab
 | `escalate`, when `severity-high` | `apply` | Assigns the report to the `on-call` role | — |
 | end | `apply` | Removes `triaging` and comments with the classification | — |
 
-There are no pull requests, and nothing is committed to your repository. The run's record, its ledger, lives in the run store: a runs repository beside your own, which every fab0 factory of the product shares.
+There are no pull requests, and nothing is committed to your repository. The run's state and its record are its issues in the runs repository, a repository beside your own that every fab0 factory of the product shares: a Pipeline Run under the report, with a Pipeline Step for each step, whose fields say where it stands and whose comments are its log.
 
 ## Files
 
@@ -26,10 +26,10 @@ There are no pull requests, and nothing is committed to your repository. The run
    ```bash
    cp -R ../fab0-examples/triage/.fab0 .fab0 && mkdir -p .claude/agents && cp ../fab0-examples/triage/agents/triager.md .claude/agents/
    ```
-2. Edit `.fab0/fab0.yaml` (the repository, the people in `support` and `on-call`, the tracker owner, and the runs repository in `store`) and `.fab0/areas.txt`.
+2. Edit `.fab0/fab0.yaml` (the repository, the people in `support` and `on-call`, the tracker owner, and the runs repository in `tracking`) and `.fab0/areas.txt`.
 3. Create the labels `needs-triage`, `triaging`, `severity-low`, `severity-medium`, `severity-high`, and `area-<area>` for each area.
-4. Create the runs repository named in `store.github`, if the product has none yet: private if your GitHub plan allows a ruleset on a private repository, else public, with a ruleset that blocks force pushes to `main` and its deletion, and write access for everyone in `people`. The `fab0:github` skill checks the labels and the runs repository, and creates the runs repository when you ask.
-5. Install [`uv`](https://docs.astral.sh/uv/), trust the folder in Claude Code, and install the plugin: `claude plugin install fab0@fab0 --scope project`. Check with `fab0-resolve validate`: it also checks that the runs repository can be reached.
+4. Create the runs repository named in `tracking.github`, if the product has none yet, with write access for everyone in `people`, and the run tracker's issue types and fields in the organisation, as the [`story`](../story/) example sets them up. The `fab0:github` skill checks the labels and the runs repository, and creates the runs repository when you ask.
+5. Install [`uv`](https://docs.astral.sh/uv/), trust the folder in Claude Code, and install the plugin: `claude plugin install fab0@fab0 --scope project`. Check with `fab0-resolve validate`: it also checks the run tracker's issue types and fields.
 
 ## Use
 

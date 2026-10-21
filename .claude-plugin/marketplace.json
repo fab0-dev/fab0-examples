@@ -12,28 +12,28 @@
       "name": "story",
       "source": "./story",
       "description": "The story example's agents (spec-author, implementer, reviewer), its spec-format skill and the merge guard",
-      "version": "0.4.0",
+      "version": "0.5.0",
       "license": "Apache-2.0"
     },
     {
       "name": "triage",
       "source": "./triage",
       "description": "The triage example's agent (triager)",
-      "version": "0.2.0",
+      "version": "0.3.0",
       "license": "Apache-2.0"
     },
     {
       "name": "feature",
       "source": "./feature",
       "description": "The feature example's agents (analyst, acceptor) and the merge guard",
-      "version": "0.2.0",
+      "version": "0.3.0",
       "license": "Apache-2.0"
     },
     {
       "name": "delivery",
       "source": "./delivery",
       "description": "The delivery example's agents (planner, implementer, reviewer, reporter) and the merge guard",
-      "version": "0.2.0",
+      "version": "0.3.0",
       "license": "Apache-2.0"
     }
   ]

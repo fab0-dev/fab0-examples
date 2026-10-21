@@ -1,5 +1,5 @@
 {
-  "$comment": "from fab0-dev/fab0-examples feature--v0.2.0",
+  "$comment": "from fab0-dev/fab0-examples feature--v0.3.0",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "The contract this run accepts from the factory that provides an interface",
   "type": "object",

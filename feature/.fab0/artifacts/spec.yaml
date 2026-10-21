@@ -1,6 +1,6 @@
-# from fab0-dev/fab0-examples feature--v0.2.0
+# from fab0-dev/fab0-examples feature--v0.3.0
 artifact: spec
-kind: store
-store: {format: markdown}
+kind: file
+file: {repo: runs, path: "runs/REPO/{run}/spec.md", format: markdown}
 verify:
   - sections: [Intent, Scope, Done when, Interfaces, Open questions]

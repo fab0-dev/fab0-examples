@@ -3,11 +3,11 @@ name: spec-format
 description: The format of a spec (Markdown) and its task list (YAML) in the story example, with the rules a good one follows. Use when writing, revising or reviewing a spec or a task list.
 user-invocable: false
 ---
-<!-- from fab0-dev/fab0-examples story--v0.4.0 -->
+<!-- from fab0-dev/fab0-examples story--v0.5.0 -->
 
 # Spec and task list
 
-A work item's spec says **what must be true when the work is done**. Its task list says **how the work splits into pull requests**. Both are reviewed together and approved by merging one pull request, so neither has a status field.
+A work item's spec says **what must be true when the work is done**. Its task list says **how the work splits into pull requests**, and is written from the spec once the spec is approved. Neither has a status field: where each one stands is the run's to track.
 
 ## The spec
 

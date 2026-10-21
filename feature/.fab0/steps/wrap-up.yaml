@@ -1,8 +1,10 @@
-# from fab0-dev/fab0-examples feature--v0.2.0
+# from fab0-dev/fab0-examples feature--v0.3.0
 step: wrap-up
 agent: analyst
 model: deep
 inputs: [feature, story, spec, contract, service-feedback, web-feedback, reviews]
 outputs: [outcome]
+repos: {write: [runs], read: [all]}
+paths: ["runs/REPO/{run}/outcome.yaml"]
 return: {questions: optional}
 owner: product-owner

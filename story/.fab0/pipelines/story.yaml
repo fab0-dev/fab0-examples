@@ -1,14 +1,20 @@
-# from fab0-dev/fab0-examples story--v0.4.0
+# from fab0-dev/fab0-examples story--v0.5.0
 pipeline: story
 trigger: {issue: {type: Story}}
 onStart:
   - git.run-branch
   - pr.open-run: {draft: true}
 steps:
-  # The spec and its task list, kept in the run store and reviewed in a pull request of the runs repository:
-  # the product owner's approving review approves them, and fab0 merges it.
+  # The spec, a file in the runs repository, reviewed in its own pull request there: the product owner's approval
+  # (an approving review, or /approve) approves it, and fab0 merges it.
   - step: spec
-    gate: {human: {owner: product-owner}}
+    gate: {human: {owner: product-owner, via: pr}}
+    done: {pr: {repo: runs, state: approved}}
+  # The task list, from the approved spec: the product owner confirms it in the run session, or rejects it with
+  # what to change.
+  - step: plan
+    gate: {human: {owner: product-owner, via: prompt}}
+    done: {issue: {status: Done}}
   # One unit per task, in parallel where their files don't overlap and their order allows.
   - foreach: tasks
     id: tasks
@@ -16,10 +22,11 @@ steps:
       - tracker.child.sync: {type: Task, title: "{unit.title}"}
     steps:
       - step: implement
-        gate: {auto: {agent: reviewer, model: deep}, merge: auto, retry: 2, then: human}
+        gate: {auto: {agent: reviewer, model: deep}, retry: 2, then: human}
+        done: {issue: {status: Done}}
     # Task pull requests merge into the run branch, which closes no issue: close the tasks' items here.
     onEnd:
       - tracker.child.close: {type: Task}
 onEnd:
   - git.sync-base
-  - pr.ready # a person merges the run; pr.merge in its place merges it, when git.auto_merge allows the base
+  - pr.merge # each run pull request into main, once its required checks pass

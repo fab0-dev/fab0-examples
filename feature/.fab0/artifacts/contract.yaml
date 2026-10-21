@@ -1,5 +1,6 @@
-# from fab0-dev/fab0-examples feature--v0.2.0
+# from fab0-dev/fab0-examples feature--v0.3.0
+# What the service hands back, read where it wrote it, once this run accepts it.
 artifact: contract
-kind: store
-store: {format: yaml}
+kind: file
+file: {format: yaml}
 schema: .fab0/schemas/contract.json

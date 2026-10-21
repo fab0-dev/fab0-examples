@@ -1,0 +1,11 @@
+# from fab0-dev/fab0-examples story--v0.5.0
+step: plan
+agent: planner
+model: deep
+skills: [spec-format]
+inputs: [intent, spec]
+outputs: [tasks]
+repos: {write: [runs], read: [all]}
+paths: ["runs/REPO/{run}/tasks.yaml"]
+return: {questions: optional}
+owner: product-owner

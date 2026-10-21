@@ -4,11 +4,10 @@
   `"$comment"`, or an HTML comment after a Markdown file's front matter);
 - the JSON files parse;
 - the merge guard blocks what it must and lets the rest through;
-- `fab0-resolve validate` accepts the wiring, with the runs repository its `store` names standing in a local folder
-  (git's `url.<base>.insteadOf` sends https://github.com/ there), as it would once the project set it up;
+- `fab0-resolve validate` accepts the wiring;
 - an example that calls connected factories (`feature`) is checked with each of them beside it, a copy of the
-  example it names in CONNECTED with its home repository set as the parent's `factories` says, committed: the
-  parent's `validate` must check every connection.
+  example it names in CONNECTED, with OWNER/REPO and REPO replaced as the parent's `factories` says, committed:
+  the parent's `validate` must check every connection.
 
 The engine is $FAB0_RESOLVE, else a sibling fab0-core checkout's, else `fab0-resolve` on PATH.
 
@@ -104,21 +103,6 @@ def check_guard(guard: Path, project: Path) -> list[str]:
     return problems
 
 
-def runs_repository(project: Path, github: Path) -> dict:
-    """A bare repository where the wiring's `store.github` points, under `github`; the environment that sends
-    https://github.com/ there."""
-    found = re.search(r"^store:.*github:\s*([\w.-]+/[\w.-]+)", (project / ".fab0" / "fab0.yaml").read_text(), re.M)
-    if found:
-        bare = github / f"{found.group(1)}.git"
-        subprocess.run(["git", "init", "-q", "--bare", "-b", "main", str(bare)], check=True)
-    return {
-        **os.environ,
-        "GIT_CONFIG_COUNT": "1",
-        "GIT_CONFIG_KEY_0": f"url.{github}/.insteadOf",
-        "GIT_CONFIG_VALUE_0": "https://github.com/",
-    }
-
-
 def connect(example: Path, project: Path) -> None:
     """Each factory the parent calls, beside it: a copy of its example, home repository as the parent names it,
     committed, since `validate` reads a connected factory's wiring at its base branch."""
@@ -127,9 +111,9 @@ def connect(example: Path, project: Path) -> None:
         github, path = factories[name]
         child = (project / path).resolve()
         assemble(ROOT / source, child)
-        wiring = child / ".fab0" / "fab0.yaml"
-        text = wiring.read_text()
-        wiring.write_text(text.replace("home: {path: ., github: OWNER/REPO,", f"home: {{path: ., github: {github},"))
+        for file in (child / ".fab0").rglob("*.yaml"):  # as the example's README says to
+            text = file.read_text().replace("OWNER/REPO", github).replace("REPO", github.split("/")[1])
+            file.write_text(text)
         who = ["-c", "user.name=check", "-c", "user.email=check@example.com"]
         subprocess.run(["git", "-C", str(child), "add", "-A"], check=True)
         subprocess.run(["git", "-C", str(child), *who, "commit", "-q", "-m", "start"], check=True)
@@ -148,9 +132,8 @@ def check(example: Path, resolve: str) -> list[str]:
         guard = project / ".claude" / "hooks" / "merge-guard.py"
         if guard.is_file():
             problems += check_guard(guard, project)
-        env = runs_repository(project, Path(tmp) / "github")
         connect(example, project)
-        run = subprocess.run([resolve, "validate", "--project", str(project)], capture_output=True, text=True, env=env)
+        run = subprocess.run([resolve, "validate", "--project", str(project)], capture_output=True, text=True)
         if run.returncode:
             try:
                 errors = json.loads(run.stdout).get("errors") or [json.loads(run.stdout)]

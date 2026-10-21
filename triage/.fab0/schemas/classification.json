@@ -1,5 +1,5 @@
 {
-  "$comment": "from fab0-dev/fab0-examples triage--v0.2.0",
+  "$comment": "from fab0-dev/fab0-examples triage--v0.3.0",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "The triage example's classification",
   "type": "object",
