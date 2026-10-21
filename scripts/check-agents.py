@@ -20,14 +20,17 @@ The check drives a 0.10 run, one session at a time, and acts between sessions on
    `fab0-resolve confirm <run> <unit>` as `po-user`, in the home checkout, between sessions: a headless session has
    nobody to ask. A session that confirmed for the person fails the check.
 4. The questions: a unit that waits on an agent's questions gets one fixed reply, which tells the agent to decide
-   and say what it chose: on the unit's pull request, or, when it has none, on the run's Story (appended to its
-   body, which is the input the run reads). A second set of questions from the same unit fails the check.
+   and say what it chose, where its step takes answers, as its wiring says: a comment on the unit's pull request when
+   the step reads its own pull request, else appended to the body of the run's Story when the step reads that (a pull
+   request the step doesn't read, which `apply` may have opened, gets nothing). A second set of questions from the
+   same unit fails the check.
 5. The run's merge into `main`: `apply` marks each run pull request merged in the fake tracker, which doesn't move
    the base; the check stands in for GitHub there and merges that pull request's branch into the base on that
    repository's `origin`, and does so for no other pull request or branch. The next session finishes the run.
 
 Anything else that stops the run fails the check, which starts no further session and names the unit and why: an
-escalation, a failure, a person's decision the check doesn't make. So does a run that isn't done within eight
+escalation, a unit blocked on a failure or another signal for people (as the engine's inbox lists them), a person's
+decision the check doesn't make. So does a run that isn't done within eight
 sessions, with the run's position as `fab0-resolve status` gives it.
 
 The outcome is read from the fake tracker's file, git and `fab0-resolve status`, never from a session's report: the
@@ -36,6 +39,12 @@ list has one Task sub-issue of the Story, closed, and an `implement` unit that t
 merged into the run branch; `apply` merged each run pull request; the tests pass on `main` of the product repository,
 which differs from its starting commit only in files a task claims, with no empty commit and no spec, task list or
 run state in it; and the runs repository's `main` holds the run's spec and task list.
+
+`--rehearse` (with `--example story`) shows the two acts a live run rarely needs, with no session and no cost: it
+sets up the same workspace and plays each agent with a scripted stand-in against the real engine and the fake tracker,
+so that the questions of a step that reads its pull request and of one that doesn't are answered where each reads
+them, and the unit is reworked (4); and a confirmation a session made is told from the check's own, by attempt, and
+the check's own is refused as "a session confirmed for the person" (3).
 
 With `--example feature`, it runs the `feature` composition instead: the parent in a product repository, and a copy
 of `delivery` in a service and a web repository beside it, each factory's run in its own session and checkout, as
@@ -170,6 +179,8 @@ PO = "po-user"  # the fake tracker has one user, who is every person the example
 MIN_ENGINE = (0, 10)  # a 0.10 run: its state on the run tracker, its merges `apply`'s
 ROUNDS = 8  # the most sessions a run may take
 STORY_REF = "acme/hotel#1"
+# why a unit is blocked on something that needs a person's attention, as the engine's inbox lists them
+SIGNALS = ("tracker", "invalid-dependency", "failed", "cross-run", "condition", "unsupported", "factory")
 # the one reply to every set of questions: deciding product questions is the person's, and the check doesn't play at it
 ANSWER = (
     "Decide this yourself, as you judge best, and say in your reply what you chose and why. "
@@ -257,6 +268,9 @@ class Check:
         self.gh = self.tmp / "gh.json"  # the check's own files stay outside the workspace
         self.cost = 0.0
         self.failures: list[str] = []
+        self.approved: set[tuple] = set()  # pull requests the check approved, at which head
+        self.answered: set[str] = set()  # units whose questions it answered
+        self.confirmed: set[tuple[str, int]] = set()  # (unit, attempt) it confirmed at the prompt
 
     def origin(self, github: str) -> Path:
         """The local bare repository that stands for `github` (`acme/hotel`): `origin` of its checkout, and where
@@ -517,13 +531,35 @@ class Check:
         print(f"  {PO} comments /approve on {github}#{pull['number']} ({unit['unit']})", flush=True)
         return None
 
+    def reads(self, unit: dict) -> set[str]:
+        """Where a unit's step takes answers, from its wiring: `pr` when it reads its own pull request (its reviews
+        and conversation comments), `item` when it reads the body of the run's item."""
+        found = set()
+        wiring = self.home / ".fab0"
+        step = yaml_load((wiring / "steps" / f"{unit['step']}.yaml").read_text())
+        for name in step.get("inputs", []):
+            file = wiring / "artifacts" / f"{name}.yaml"
+            if not file.is_file():  # `unit` is no artifact: the task the unit is for
+                continue
+            artifact = yaml_load(file.read_text())
+            spec = artifact.get(artifact.get("kind"), {})
+            if artifact.get("kind") == "pr" and spec.get("of") == "unit":
+                found.add("pr")
+            elif artifact.get("kind") == "issue" and spec.get("of") == "run" and spec.get("part") == "body":
+                found.add("item")
+        return found
+
     def answer(self, unit: dict) -> str | None:
-        """The one reply to a unit's questions: on its pull request, or on the run's Story when it has none, where
-        the run reads it as an input that changed. Why it can't, if it can't."""
+        """The one reply to a unit's questions, where its step takes answers (`reads`): a comment on its pull request
+        when it reads that, else appended to the body of the run's Story, which it reads as `intent`. Why it can't,
+        if it can't."""
         if unit["unit"] in self.answered:
             return "asks questions a second time: the check answers each unit once"
+        reads = self.reads(unit)
+        found = self.pull_of(unit["branch"]) if "pr" in reads and unit.get("branch") else None
+        if found is None and "item" not in reads:
+            return "asks questions, and the check finds no pull request or item the step reads to answer them on"
         self.answered.add(unit["unit"])
-        found = self.pull_of(unit["branch"]) if unit.get("branch") else None
 
         def reply(data: dict) -> None:
             if found is None:
@@ -547,18 +583,20 @@ class Check:
             if "decided already" in error or "isn't waiting for a confirmation" in error:
                 return f"a session confirmed for the person ({error})"
             return f"can't be confirmed: {error}"
-        self.confirmed.add(unit["unit"])
+        self.confirmed.add((unit["unit"], int(result["attempt"])))
         print(f"  {PO} confirms {unit['unit']} at the prompt: {result.get('line', '')}", flush=True)
         return None
 
     def confirmed_by_a_session(self, run: str) -> list[str]:
-        """Units whose confirmation at the prompt the run's Pipeline Steps hold, which the check didn't make."""
+        """Attempts whose confirmation at the prompt the run's Pipeline Steps hold, which the check didn't make: each
+        as `unit` and its attempt."""
         found = []
         for name, fact in self.step_facts(run).items():
-            unit = name.removesuffix("-gate").rsplit("-", 1)[0]
-            if name.endswith("-gate") and fact.get("gate", {}).get("via") == "prompt" and unit not in self.confirmed:
-                found.append(unit)
-        return sorted(set(found))
+            if name.endswith("-gate") and fact.get("gate", {}).get("via") == "prompt":
+                unit, attempt = name.removesuffix("-gate").rsplit("-", 1)
+                if (unit, int(attempt)) not in self.confirmed:
+                    found.append(f"{unit}, attempt {attempt}")
+        return sorted(found)
 
     def merge_runs(self, run_branch: str) -> list[str]:
         """What GitHub does and the fake doesn't: a run pull request that `apply` marked merged reaches the base of
@@ -602,7 +640,7 @@ class Check:
             if reason.get("gate") in ("merge", "gate", "running", "ack") or "done" in reason:
                 return "go"
             return "stuck"  # an escalation, a decision by issue or label, anything else a person decides
-        if state == "blocked" and set(reason) & {"failed", "factory", "invalid-dependency", "tracker"}:
+        if state == "blocked" and set(reason) & set(SIGNALS):
             return "stuck"
         return "go"
 
@@ -780,9 +818,6 @@ class Check:
 
     def run(self) -> int:
         self.setup()
-        self.approved: set[tuple] = set()  # pull requests the check approved, at which head
-        self.answered: set[str] = set()  # units whose questions it answered
-        self.confirmed: set[str] = set()  # units it confirmed at the prompt
         if not self.validate():
             return self.finish()
         if not self.claude("/fab0:run #1 --profile cheap"):
@@ -877,6 +912,167 @@ class Check:
         else:
             shutil.rmtree(self.tmp)
         return 1 if self.failures else 0
+
+
+SPEC = """# Extend a booking
+
+## Intent
+
+The front desk extends a booking.
+
+## Scope
+
+- In: extending a booking.
+
+## Scenarios
+
+### S1: a free room is extended
+
+- Given a booking
+- When the front desk extends it by a night
+- Then the booking ends a day later
+
+## Constraints
+
+- Standard library only.
+
+## Decisions
+
+- None.
+
+## Open questions
+
+None
+"""
+
+
+class Rehearsal(Check):
+    """What a live run rarely shows: the product owner's answer to an agent's questions (S5) and the refusal of a
+    confirmation a session made (S6), against the real engine and the fake tracker, with a scripted stand-in for each
+    agent. It starts no Claude Code session and costs nothing."""
+
+    def __init__(self, keep: bool, model: str, budget: str):
+        super().__init__(keep, model, budget)
+        self.versions = 0
+
+    def write(self, run: str, hand: dict, tree: str) -> None:
+        """What the stand-in for the unit's agent writes: a new version of its output each time."""
+        self.versions += 1
+        if hand["unit"] == "spec":
+            path, text = f"runs/hotel/{run}/spec.md", SPEC + f"\nVersion {self.versions}.\n"
+        else:
+            path = f"runs/hotel/{run}/tasks.yaml"
+            text = f"- id: T1\n  title: Extend, version {self.versions}\n  repo: home\n  files: [hotel/booking.py]\n"
+        (Path(tree) / path).parent.mkdir(parents=True, exist_ok=True)
+        (Path(tree) / path).write_text(text)
+
+    def round(self, run: str, questions: dict[str, list[str]] | None = None) -> None:
+        """One round of a run session: `next --apply`, what its hand-outs ask of an agent (checkouts, the work, the
+        return, `record`), then `next --apply` again, as the next round does: it opens the pull requests."""
+        repos = {"home": self.home, "runs": self.workspace / "hotel-runs"}
+        for hand in self.resolve("next", run, "--apply", "--profile", "cheap").get("handouts", []):
+            if hand["executor"] != "agent" or hand.get("gate") is True:
+                continue
+            for branch in hand["branches"]:
+                repo = repos[branch["repo"]]
+                if Path(branch["worktree"]).exists():  # an earlier attempt's checkout of the branch
+                    continue
+                if branch["exists"]:
+                    git(repo, "worktree", "add", branch["worktree"], branch["branch"])
+                else:
+                    git(repo, "worktree", "add", "-b", branch["branch"], branch["worktree"], branch["from"])
+            self.write(run, hand, hand["branches"][0]["worktree"])
+            returned = {"summary": f"wrote {hand['unit']}"}
+            if (questions or {}).get(hand["unit"]):
+                returned["questions"] = questions[hand["unit"]]
+            file = self.tmp / "return.json"
+            file.write_text(json.dumps(returned))
+            done = self.resolve("record", run, hand["unit"], "--return", str(file), "--profile", "cheap")
+            if not done.get("ok"):
+                self.expect(False, f"the stand-in's {hand['unit']} is recorded ({done})")
+        self.resolve("next", run, "--apply", "--profile", "cheap")
+
+    def comments(self, unit: dict) -> list[str]:
+        found = self.pull_of(unit["branch"])
+        return [c["body"] for c in found[1].get("comments", [])] if found else []
+
+    def run(self) -> int:
+        self.setup()
+        if not self.validate():
+            return self.finish()
+        run = self.resolve("start", "#1", "--session", "--profile", "cheap").get("run")
+        if not run:
+            self.expect(False, "the run starts")
+            return self.finish()
+        unit = lambda name: self.units(run).get(name, {})  # noqa: E731
+        asks = lambda u: u.get("state") == "waiting" and "questions" in (u.get("reason") or {})  # noqa: E731
+
+        # S5, a step that reads its own pull request: the answer is a comment there, and the unit is reworked
+        self.round(run, {"spec": ["Which dates collide?"]})
+        spec = unit("spec")
+        self.expect(asks(spec) and self.classify(spec) == "answer", f"spec waits on questions ({spec.get('reason')})")
+        self.expect(self.reads(spec) == {"pr", "item"}, f"spec reads its pull request and the item ({self.reads(spec)})")
+        self.expect(self.answer(spec) is None, "the check answers the questions of spec")
+        self.expect(self.comments(spec) == [ANSWER], f"the answer is a comment on spec's pull request ({self.comments(spec)})")
+        spec = unit("spec")
+        self.expect(
+            spec.get("state") == "ready" and bool((spec.get("reason") or {}).get("rework")),
+            f"spec is reworked with the answer ({spec.get('state')}, {spec.get('reason')})",
+        )
+        # and only once
+        self.round(run, {"spec": ["And which rooms?"]})
+        spec = unit("spec")
+        self.expect(asks(spec), f"spec asks a second time ({spec.get('reason')})")
+        why = self.answer(spec)
+        self.expect(bool(why) and "second time" in why, f"the check doesn't answer a second time ({why})")
+        self.change_gh(  # a person's own words, which the check never writes: a review of its kind
+            lambda data: data["pulls"][RUNS][0].setdefault("comments", []).append(
+                {"id": 9, "body": "Keep it small.", "user": PO, "at": self.clock(time.time())}
+            )
+        )
+        self.round(run)
+        spec = unit("spec")
+        self.expect(spec.get("reason") == {"gate": "human"}, f"spec waits on its human gate ({spec.get('reason')})")
+        self.expect(self.approve(spec) is None, "the check approves spec's pull request")
+
+        # S5, a step that doesn't: its pull request is no place for the answer, which goes on the run's item
+        self.round(run, {"plan": ["Which room?"]})
+        plan = unit("plan")
+        self.expect(asks(plan) and self.classify(plan) == "answer", f"plan waits on questions ({plan.get('reason')})")
+        self.expect(self.pull_of(plan["branch"]) is not None, "plan has a pull request, which it doesn't read")
+        self.expect(self.reads(plan) == {"item"}, f"plan reads the item, not its pull request ({self.reads(plan)})")
+        self.expect(self.answer(plan) is None, "the check answers the questions of plan")
+        self.expect(self.comments(plan) == [], f"nothing is said on plan's pull request ({self.comments(plan)})")
+        story = self.issues()[STORY_REF]["body"]
+        self.expect(story.endswith(ANSWER), "the answer is appended to the body of the run's Story")
+        self.expect(not asks(unit("plan")), f"plan no longer waits on its questions ({unit('plan').get('state')})")
+
+        # S6: the refusal, and the confirmations of a session that the check didn't make, by attempt
+        for _ in range(8):
+            plan = unit("plan")
+            if plan.get("reason") == {"gate": "prompt"}:
+                break
+            for u in self.status(run)["units"]:
+                if self.classify(u) == "approve":
+                    self.approve(u)
+            self.round(run)
+        self.expect(plan.get("reason") == {"gate": "prompt"}, f"plan waits for a confirmation ({plan.get('reason')})")
+        first = plan.get("attempt")
+        decided = self.resolve("confirm", run, "plan", "--reject", "Add a task.", "--profile", "cheap")
+        self.expect(decided.get("ok") is True, f"a session decides at the prompt, for the person ({decided.get('error')})")
+        self.round(run)
+        plan = unit("plan")
+        self.expect(plan.get("reason") == {"gate": "prompt"} and plan.get("attempt") == first + 1, "plan is reworked")
+        self.expect(self.confirm(run, plan) is None, "the check confirms the reworked plan")
+        self.expect(
+            self.confirmed_by_a_session(run) == [f"plan, attempt {first}"],
+            f"only the session's decision is told apart, by attempt ({self.confirmed_by_a_session(run)})",
+        )
+        why = self.confirm(run, plan)
+        self.expect(
+            bool(why) and why.startswith("a session confirmed for the person"), f"a decided plan is refused ({why})"
+        )
+        return self.finish()
 
 
 FEATURE = """Customers pay for their order by card at checkout. Done when a customer can pay by card, sees whether \
@@ -1150,14 +1346,21 @@ def main() -> int:
     parser.add_argument(
         "--keep", action="store_true", help="keep the temporary project"
     )
+    parser.add_argument(
+        "--rehearse",
+        action="store_true",
+        help="with --example story: the product owner's acts against the engine and a stand-in for each agent, "
+        "with no session",
+    )
     args = parser.parse_args()
+    if args.rehearse and args.example != "story":
+        parser.error("--rehearse is for --example story")
     problem = engine_problem()
     if problem:
         print(f"FAIL  {problem}", flush=True)
         return 1  # no workspace yet, and no session
-    return (Composition if args.example == "feature" else Check)(
-        args.keep, args.model, args.budget
-    ).run()
+    kind = Rehearsal if args.rehearse else Composition if args.example == "feature" else Check
+    return kind(args.keep, args.model, args.budget).run()
 
 
 if __name__ == "__main__":
