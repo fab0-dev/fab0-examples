@@ -22,4 +22,4 @@ scripts/check-examples
 claude plugin validate --strict .
 ```
 
-After changing an agent, a skill or the `story` wiring, run `python3 scripts/check-agents.py`; after changing the `feature` or `delivery` example, `python3 scripts/check-agents.py --example feature`. Both cost tokens.
+After changing an agent, a skill or the `story` wiring, run `uv run python scripts/check-agents.py --example story`; after changing the `feature` or `delivery` example, `uv run python scripts/check-agents.py --example feature`. Both cost tokens. Each drives a 0.10 run on a fake tracker, acts only where the examples name a person (approving, confirming at the prompt, answering questions, merging a run pull request on its local `origin`), and judges the outcome from the tracker and the repositories: the run is done, its issues are closed, the tests pass, and the repositories hold only the tasks' changes.
