@@ -1,6 +1,6 @@
 {
   "name": "delivery",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "The delivery example's agents (planner, implementer, reviewer, reporter) and the merge guard: a connected factory that a parent calls, or that runs on its own",
   "author": {
     "name": "fab0-dev",

@@ -6,14 +6,14 @@ Example factories for [fab0](https://github.com/fab0-dev/fab0), the toolkit for 
 
 | Example | What it shows |
 |---|---|
-| [`story`](story/) | Delivery. A product owner approves a spec and task list; agents implement each task in parallel on sub-branches, another agent reviews and merges them into the run's branch, and a person merges the run into `main`, or `apply` does where the merge policy allows |
-| [`feature`](feature/) | Composition. A Story of a Feature is specified, then built by connected factories side by side, each in its own repository, and wrapped up from what they hand back: follow-up Stories under the Feature, or the Feature closed |
+| [`story`](story/) | Delivery. A product owner approves a spec in a pull request and confirms its task list at the prompt; agents implement each task in parallel on sub-branches, another agent reviews them and `apply` merges them into the run's branch, and the run merges into `main` once its checks pass |
+| [`feature`](feature/) | Composition. A Story of a Feature is specified, then built by connected factories side by side, each in a child run of its own repository, and wrapped up from what they hand back: follow-up Stories under the Feature, or the Feature closed |
 | [`delivery`](delivery/) | A connected factory: one team's delivery, called by a parent such as `feature` or run on its own. It plans, provides a contract when other teams build against it, implements each task, and reports on its own area |
 | [`triage`](triage/) | Not delivery. New bug reports are classified by an agent, checked by a command, labelled, and escalated when severe, all in the tracker, with no pull requests |
 
 ## Copy or install
 
-**Copy** (recommended). The files become yours: versioned with your project, editable, and a diff against a newer release shows what changed. Every copied file names its source and release on its first line, for example `# from fab0-dev/fab0-examples story--v0.4.0`. Each example's README lists what to copy where.
+**Copy** (recommended). The files become yours: versioned with your project, editable, and a diff against a newer release shows what changed. Every copied file names its source and release on its first line, for example `# from fab0-dev/fab0-examples story--v0.5.0`. Each example's README lists what to copy where.
 
 **Install** the example's agents, skills and hooks as a plugin instead, if you want updates without owning the files. The wiring in `.fab0/` is always copied. Then name the agents and skills with the plugin's prefix in your steps, for example `agent: story:spec-author` and `skills: [story:spec-format]`.
 

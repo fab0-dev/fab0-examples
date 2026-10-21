@@ -1,31 +1,32 @@
-# from fab0-dev/fab0-examples story--v0.4.0
-# A delivery factory: a product owner's spec and task list, reviewed in the runs repository, then each task
-# implemented by an agent, reviewed by another agent and merged into the run's branch; a person merges the run
-# into main. Your repositories receive only the tasks' changes.
-schema: 2
+# from fab0-dev/fab0-examples story--v0.5.0
+# A delivery factory: a product owner's spec, reviewed in a pull request of the runs repository; its task list,
+# confirmed at the prompt; each task implemented by an agent, reviewed by another and merged into the run's branch;
+# and the run merged into main once its checks pass. Your repositories receive only the tasks' changes.
+schema: 3
 repos:
   # EDIT: this repository, and one entry per repository tasks may change (sibling checkouts).
+  # The organisation and this repository's name are placeholders everywhere in .fab0/, as the README says: the
+  # repository's name is the factory's name.
   home: {path: ., github: OWNER/REPO, owner: product-owner}
   # backend: {path: ../backend, github: OWNER/backend, owner: backend}
+  # The runs repository, a sibling checkout too: it holds the specs and task lists, and the tracker's issues of
+  # every run. Every factory of a product shares one.
+  runs: {path: ../REPO-runs, github: OWNER/REPO-runs}
 people:
   # EDIT: the GitHub users in each role.
   product-owner: {github: [USER]}
 tracker:
   kind: github
-  owner: OWNER # EDIT
+  owner: OWNER
   # project: 1     # EDIT: a GitHub Project number, to show each item's state on a board
   # fields: {signal: fab0}
 git:
   base: main
   branching: run
-  auto_merge: {into: [run]}
-  # A run nobody merges: apply merges it into main once every gate has passed, with pr.merge in place of
-  # pr.ready at the end of pipelines/story.yaml.
-  # auto_merge: {into: [run, base], allow_base: true}
 parallel: {max: 3, cross_run: warn}
-# EDIT: the runs repository, which holds what runs produce for themselves: their ledger, specs and task lists,
-# and the specs' review pull requests. Every factory of a product shares one.
-store: {github: OWNER/REPO-runs}
+# The run tracker: a Pipeline Run issue for each run, with a Pipeline Step sub-issue for each of its steps, in the
+# runs repository. Their fields carry the run's state from step to step.
+tracking: {kind: github, github: OWNER/REPO-runs}
 models:
   claude-code: {deep: opus, balanced: sonnet, fast: haiku}
 profiles:

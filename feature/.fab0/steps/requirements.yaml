@@ -1,8 +1,10 @@
-# from fab0-dev/fab0-examples feature--v0.2.0
+# from fab0-dev/fab0-examples feature--v0.3.0
 step: requirements
 agent: analyst
 model: deep
 inputs: [feature, story, reviews]
 outputs: [spec]
+repos: {write: [runs], read: [all]}
+paths: ["runs/REPO/{run}/spec.md"]
 return: {questions: optional}
 owner: product-owner

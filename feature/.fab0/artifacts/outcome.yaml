@@ -1,6 +1,6 @@
-# from fab0-dev/fab0-examples feature--v0.2.0
+# from fab0-dev/fab0-examples feature--v0.3.0
 artifact: outcome
-kind: store
-store: {format: yaml}
+kind: file
+file: {repo: runs, path: "runs/REPO/{run}/outcome.yaml", format: yaml}
 schema: .fab0/schemas/outcome.json
 elements: {at: follow-ups, id: id, title: title}

@@ -1,11 +1,17 @@
-# from fab0-dev/fab0-examples feature--v0.2.0
+# from fab0-dev/fab0-examples feature--v0.3.0
 # The parent of a composition: a Story of a Feature, specified by its product owner, built by connected factories
 # side by side (here a service and its web client, each a copy of the delivery example), and wrapped up from what
 # they hand back: follow-up Stories under the same Feature, or the Feature closed. This repository holds no code.
-schema: 2
+schema: 3
 repos:
   # EDIT: this repository, where the Features and their Stories are filed.
+  # The organisation and this repository's name are placeholders everywhere in .fab0/, as the README says: the
+  # repository's name is the factory's name.
   home: {path: ., github: OWNER/REPO, owner: product-owner}
+  # EDIT: the runs repository, a sibling checkout, which this factory and every factory it calls share: the
+  # requirements, the wrap-up and what the factories hand back are files there, and the tracker's issues of every
+  # run.
+  runs: {path: ../PRODUCT-runs, github: OWNER/PRODUCT-runs}
 factories:
   # EDIT: one entry per connected factory: its home repository, its checkout beside this one, and the role whose
   # turn it is while its child run works. The pipeline's calls name them.
@@ -18,14 +24,14 @@ people:
   web-developer: {github: [USER]}
 tracker:
   kind: github
-  owner: OWNER # EDIT: the same as every connected factory's
+  owner: OWNER # the same as every connected factory's
   # project: 1     # EDIT: a GitHub Project number, to show each item's state on a board
   # fields: {signal: fab0}
 git:
   base: main
-  branching: flat # the parent writes no repository: its work is in the run store and the factories'
-# EDIT: the runs repository, which this factory and every factory it calls share, each under its own project.
-store: {github: OWNER/REPO-runs}
+  branching: run # the parent writes only the runs repository: a run branch there, merged into main at the end
+# The run tracker, which every factory it calls shares: each call opens a child Pipeline Run under this run's.
+tracking: {kind: github, github: OWNER/PRODUCT-runs}
 models:
   claude-code: {deep: opus, balanced: sonnet, fast: haiku}
 profiles:

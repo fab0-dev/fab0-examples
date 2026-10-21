@@ -1,5 +1,5 @@
 #!/usr/bin/env -S uv run --quiet --script
-# from fab0-dev/fab0-examples triage--v0.2.0
+# from fab0-dev/fab0-examples triage--v0.3.0
 # /// script
 # requires-python = ">=3.11"
 # dependencies = ["pyyaml"]
@@ -9,7 +9,7 @@ the report a duplicate of itself. Exit 0 approves; anything else rejects, with t
 
     classification.py RUN ATTEMPT
 
-ATTEMPT is the attempt's ledger entry, a YAML file, which the gate's `{attempt}` names.
+ATTEMPT is the attempt as fab0 recorded it on its Pipeline Step, a YAML file, which the gate's `{attempt}` names.
 """
 
 import sys
